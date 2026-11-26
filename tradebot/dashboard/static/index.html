@@ -1,0 +1,1449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tradebot Control Room</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#03080b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: control-room grid of instrument panels; one column on phones, 12 columns on desktop.
+   Single dark look by choice (a trading-floor display), so colors are set explicitly here. */
+:root {
+  color-scheme: dark;
+  --bg: #03080b;
+  --panel: #061117;
+  --panel-2: #08171f;
+  --line: rgba(80, 220, 210, .16);
+  --line-2: rgba(80, 220, 210, .32);
+  --fg: #cdeeee;
+  --dim: #5f8d91;
+  --faint: #2a4a50;
+  --teal: #2ff3d2;
+  --cyan: #3cc8ff;
+  --good: #3dff9b;
+  --warn: #ffb648;
+  --bad: #ff4f6d;
+  --gold: #ffd36b;
+  --violet: #9a8cff;
+  --f-display: "Chakra Petch", "Rajdhani", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--fg); }
+body {
+  margin: 0;
+  font: 13px/1.45 var(--f-mono);
+  font-variant-numeric: tabular-nums;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 56px;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(47, 243, 210, .07), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.012) 0 1px, transparent 1px 3px),
+    var(--bg);
+  min-height: 100%;
+  overflow-x: hidden;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--bg); }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* ---------- header ---------- */
+.top {
+  position: relative; z-index: 20;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+  padding: 10px 0 8px; background: linear-gradient(var(--bg) 75%, transparent);
+}
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand svg { flex: none; }
+.brand h1 {
+  margin: 0; font: 700 18px/1 var(--f-display); letter-spacing: .06em; white-space: nowrap;
+}
+.brand h1 b { color: var(--teal); font-weight: 700; }
+.brand h1 span { color: var(--dim); font-weight: 500; }
+.sub { font-size: 10px; color: var(--dim); letter-spacing: .14em; text-transform: uppercase; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; align-items: center; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--line-2);
+  font: 600 11px/1.3 var(--f-display); letter-spacing: .12em; text-transform: uppercase; border-radius: 2px;
+  background: rgba(47,243,210,.05); white-space: nowrap;
+}
+.chip i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
+.chip.good { color: var(--good); border-color: rgba(61,255,155,.4); }
+.chip.warn { color: var(--warn); border-color: rgba(255,182,72,.45); background: rgba(255,182,72,.07); }
+.chip.bad { color: var(--bad); border-color: rgba(255,79,109,.45); }
+.chip.info { color: var(--cyan); }
+.clock { font: 600 15px/1 var(--f-mono); color: var(--fg); letter-spacing: .04em; }
+.clock small { color: var(--dim); font-size: 10px; margin-left: 4px; }
+.btn {
+  cursor: pointer; border: 1px solid var(--line-2); background: rgba(47,243,210,.06); padding: 5px 10px;
+  font: 600 11px/1.2 var(--f-display); letter-spacing: .12em; text-transform: uppercase; border-radius: 2px;
+  color: var(--teal);
+}
+.btn:hover { background: rgba(47,243,210,.14); }
+.btn.danger { color: var(--bad); border-color: rgba(255,79,109,.45); background: rgba(255,79,109,.06); }
+.btn.go { color: var(--good); border-color: rgba(61,255,155,.45); background: rgba(61,255,155,.07); }
+.btn.armed { animation: blink .7s steps(2) infinite; }
+.btn[disabled] { opacity: .35; cursor: not-allowed; }
+@keyframes blink { 50% { background: rgba(255,255,255,.14); } }
+
+.demo-banner {
+  display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 4px 0 10px; padding: 8px 12px;
+  border: 1px solid rgba(255,182,72,.55); color: var(--warn);
+  background: repeating-linear-gradient(-45deg, rgba(255,182,72,.10) 0 10px, rgba(255,182,72,.03) 10px 20px);
+  font: 600 12px/1.4 var(--f-display); letter-spacing: .08em;
+}
+.demo-banner b { font-size: 13px; letter-spacing: .16em; }
+.demo-banner span { color: var(--fg); font-family: var(--f-mono); font-weight: 400; letter-spacing: 0; font-size: 11.5px; }
+.demo-banner .btn { margin-left: auto; color: var(--warn); border-color: rgba(255,182,72,.5); }
+
+@media (min-width: 760px) { .top { position: sticky; top: env(safe-area-inset-top, 0px); } }
+/* ---------- timeline ---------- */
+.timeline { position: relative; height: 34px; margin: 0 0 10px; border: 1px solid var(--line); background: var(--panel); }
+.timeline .seg { position: absolute; top: 0; bottom: 0; }
+.timeline .seg.warm { background: rgba(60,200,255,.06); }
+.timeline .seg.entry { background: linear-gradient(90deg, rgba(47,243,210,.10), rgba(47,243,210,.05)); }
+.timeline .seg.manage { background: rgba(255,182,72,.07); }
+.timeline .seg.flat { background: rgba(255,79,109,.10); }
+.timeline .tick { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--line-2); }
+.timeline .tick span { position: absolute; top: 2px; left: 4px; font-size: 9.5px; color: var(--dim); white-space: nowrap; }
+.timeline .tick.r span { left: auto; right: 4px; }
+@media (max-width: 759px) { .timeline .tick.n span { display: none; } }
+.timeline .now { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--teal); box-shadow: 0 0 10px var(--teal); transition: left .8s linear; }
+.timeline .now::after { content: attr(data-l); position: absolute; bottom: 2px; left: 6px; font-size: 10px; color: var(--teal); white-space: nowrap; }
+.timeline .now.flip::after { left: auto; right: 6px; }
+.timeline .scan { position: absolute; bottom: 3px; width: 2px; height: 8px; background: var(--cyan); opacity: .6; }
+.timeline .scan.hit { background: var(--good); height: 13px; opacity: 1; box-shadow: 0 0 6px var(--good); }
+
+/* ---------- grid + panels ---------- */
+.grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 10px; }
+.panel {
+  position: relative; min-width: 0; border: 1px solid var(--line); background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  padding: 10px 12px 12px; grid-column: span 12;
+}
+.panel::before, .panel::after { content: ""; position: absolute; width: 9px; height: 9px; border-color: var(--teal); border-style: solid; opacity: .7; }
+.panel::before { top: -1px; left: -1px; border-width: 1px 0 0 1px; }
+.panel::after { bottom: -1px; right: -1px; border-width: 0 1px 1px 0; }
+.ph { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.ph h2 { margin: 0; font: 600 12px/1.2 var(--f-display); letter-spacing: .18em; text-transform: uppercase; color: var(--fg); }
+.ph h2::before { content: "◆ "; color: var(--teal); font-size: 9px; vertical-align: 1px; }
+.ph .meta { font-size: 10px; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; }
+.ph .right { margin-left: auto; }
+.note { font-size: 10.5px; color: var(--dim); margin: 6px 0 0; }
+
+@media (min-width: 760px) {
+  .s4 { grid-column: span 6; } .s3 { grid-column: span 6; } .s6 { grid-column: span 12; } .s8 { grid-column: span 12; }
+}
+@media (min-width: 1180px) {
+  .s3 { grid-column: span 3; } .s4 { grid-column: span 4; } .s6 { grid-column: span 6; } .s8 { grid-column: span 8; }
+  .s5 { grid-column: span 5; } .s7 { grid-column: span 7; }
+}
+
+/* ---------- KPI strip ---------- */
+.kpis { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; margin-bottom: 10px; }
+.kpis .kpi:last-child { grid-column: span 2; }
+@media (min-width: 760px) { .kpis { grid-template-columns: repeat(5, minmax(0,1fr)); } .kpis .kpi:last-child { grid-column: auto; } }
+.kpi { position: relative; border: 1px solid var(--line); background: var(--panel); padding: 8px 10px 6px; min-width: 0; overflow: hidden; }
+.kpi .l { font-size: 9.5px; color: var(--dim); letter-spacing: .14em; text-transform: uppercase; display: flex; gap: 6px; }
+.kpi .l em { font-style: normal; color: var(--warn); margin-left: auto; }
+.kpi .v { font: 600 clamp(19px, 5.4vw, 26px)/1.15 var(--f-display); letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi .v small { font-size: 12px; color: var(--dim); margin-left: 4px; }
+.kpi .s { font-size: 10px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi canvas { position: absolute; right: 0; bottom: 0; width: 55%; height: 28px; opacity: .8; pointer-events: none; }
+.up { color: var(--good); } .dn { color: var(--bad); } .muted { color: var(--dim); }
+
+/* ---------- watchlist ---------- */
+.watch { display: grid; gap: 6px; }
+.wrow {
+  display: grid; grid-template-columns: 54px 1fr auto; align-items: center; gap: 4px 10px; padding: 6px 8px;
+  border: 1px solid var(--line); background: rgba(0,0,0,.2); cursor: pointer; text-align: left; width: 100%;
+}
+.wrow:hover, .wrow.sel { border-color: var(--teal); background: rgba(47,243,210,.07); }
+.wrow .t { font: 700 14px/1 var(--f-display); letter-spacing: .06em; }
+.wrow .p { font-size: 12px; }
+.wrow .a { font: 600 10px/1 var(--f-display); letter-spacing: .12em; padding: 3px 6px; border: 1px solid currentColor; }
+.pips { display: flex; gap: 3px; grid-column: 2 / 4; }
+.pips i { flex: 1; height: 4px; background: var(--faint); }
+.pips i.p { background: var(--teal); box-shadow: 0 0 5px rgba(47,243,210,.6); }
+.pips i.f { background: rgba(255,79,109,.65); }
+.wrow.planning { border-color: var(--cyan); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 1px var(--cyan), 0 0 18px rgba(60,200,255,.35); } }
+
+/* ---------- vortex ---------- */
+.vortex-wrap { position: relative; height: clamp(320px, 92vw, 520px); }
+@media (min-width: 1180px) { .vortex-wrap { height: 520px; } }
+.vortex-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.vortex-hud { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; gap: 8px; font-size: 10px; color: var(--dim); pointer-events: none; flex-wrap: wrap; }
+.vortex-hud b { color: var(--fg); font-weight: 500; }
+
+/* ---------- gauges ---------- */
+.gauges { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.gauge { text-align: center; border: 1px solid var(--line); padding: 6px 4px 6px; background: rgba(0,0,0,.18); }
+.gauge svg { width: 100%; max-width: 140px; height: auto; display: block; margin: 0 auto; }
+.gauge .gl { font-size: 9.5px; letter-spacing: .12em; color: var(--dim); text-transform: uppercase; }
+.gauge .gv { font: 600 15px/1.1 var(--f-display); }
+.gauge .gs { font-size: 9.5px; color: var(--dim); }
+.limits { margin-top: 10px; display: grid; gap: 4px; font-size: 11px; }
+.limits div { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px dotted var(--faint); padding: 2px 0; }
+.limits span:first-child { color: var(--dim); }
+
+/* ---------- checklist matrix ---------- */
+.scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.matrix { border-collapse: separate; border-spacing: 3px; width: 100%; min-width: 620px; }
+.matrix th { font: 600 9.5px/1.2 var(--f-display); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); text-align: left; padding: 2px 4px; }
+.matrix td { padding: 5px 6px; border: 1px solid var(--line); background: rgba(0,0,0,.2); font-size: 11px; white-space: nowrap; position: relative; }
+.matrix td.tk { font: 700 13px/1 var(--f-display); letter-spacing: .06em; cursor: pointer; }
+.matrix tr.sel td.tk { color: var(--teal); }
+.matrix td.P { border-color: rgba(47,243,210,.45); background: rgba(47,243,210,.08); color: var(--teal); }
+.matrix td.F { border-color: rgba(255,79,109,.35); background: rgba(255,79,109,.07); color: #ff98aa; }
+.matrix td .ic { font-weight: 700; margin-right: 4px; }
+.matrix td.dis::after { content: ""; position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; background: var(--warn); border-radius: 50%; box-shadow: 0 0 6px var(--warn); }
+.matrix td.vd { font: 600 11px/1 var(--f-display); letter-spacing: .1em; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 10px; color: var(--dim); margin-top: 6px; }
+.legend i { display: inline-block; width: 8px; height: 8px; margin-right: 4px; vertical-align: 0; }
+
+/* ---------- plan ---------- */
+.plan-grid { display: grid; grid-template-columns: minmax(0,1fr); gap: 10px; }
+@media (min-width: 760px) { .plan-grid { grid-template-columns: minmax(0,1.15fr) minmax(0,1fr); } }
+pre.json {
+  margin: 0; padding: 10px; background: #020609; border: 1px solid var(--line); font: 11.5px/1.5 var(--f-mono);
+  overflow: auto; max-height: 360px; white-space: pre; color: #9fc6c8;
+}
+.json .k { color: var(--cyan); } .json .s { color: #ffd9a0; } .json .n { color: var(--gold); } .json .b { color: var(--violet); }
+.json .pass { color: var(--good); } .json .fail { color: var(--bad); }
+.verdict { padding: 8px 10px; border: 1px solid; margin-bottom: 8px; font: 600 14px/1.2 var(--f-display); letter-spacing: .12em; }
+.verdict.ok { color: var(--good); border-color: rgba(61,255,155,.5); background: rgba(61,255,155,.07); }
+.verdict.no { color: var(--bad); border-color: rgba(255,79,109,.45); background: rgba(255,79,109,.06); }
+.verdict small { display: block; font: 400 10.5px/1.4 var(--f-mono); letter-spacing: 0; color: var(--fg); margin-top: 4px; }
+ul.reasons { margin: 0 0 8px; padding-left: 16px; font-size: 11px; color: #ffb3c0; }
+.kv { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 2px 12px; font-size: 11px; }
+.kv div { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dotted var(--faint); padding: 2px 0; min-width: 0; }
+.kv span:first-child { color: var(--dim); }
+.news { margin-top: 8px; font-size: 11px; }
+.news .h { color: var(--dim); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 3px; }
+.news div.n { border-left: 2px solid var(--faint); padding: 2px 0 2px 8px; margin-bottom: 3px; overflow-wrap: anywhere; }
+
+/* ---------- positions ---------- */
+.positions { display: grid; gap: 10px; }
+.pos { border: 1px solid var(--line); background: rgba(0,0,0,.22); padding: 10px; }
+.pos-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.pos-h .t { font: 700 18px/1 var(--f-display); letter-spacing: .06em; }
+.pos-h .d { font: 600 10px/1 var(--f-display); letter-spacing: .14em; padding: 3px 6px; border: 1px solid currentColor; }
+.pos-h .r { margin-left: auto; font: 700 22px/1 var(--f-display); }
+.pos-h .pnl { font-size: 12px; }
+.ladder { position: relative; height: 74px; margin: 16px 4px 4px; }
+.ladder .rail { position: absolute; left: 0; right: 0; top: 32px; height: 8px; background: rgba(255,255,255,.04); border: 1px solid var(--faint); }
+.ladder .zone { position: absolute; top: 32px; height: 8px; transition: left .6s ease, width .6s ease; }
+.ladder .zone.risk { background: linear-gradient(90deg, rgba(255,79,109,.55), rgba(255,79,109,.15)); }
+.ladder .zone.rew { background: linear-gradient(90deg, rgba(61,255,155,.12), rgba(61,255,155,.45)); }
+.ladder .zone.lock { background: repeating-linear-gradient(-45deg, rgba(255,211,107,.6) 0 4px, rgba(255,211,107,.25) 4px 8px); top: 30px; height: 12px; }
+.ladder .mk { position: absolute; top: 22px; width: 0; height: 28px; transition: left .6s ease; }
+.ladder .mk::before { content: ""; position: absolute; left: -1px; top: 0; bottom: 0; width: 2px; background: currentColor; }
+.ladder .mk span { position: absolute; transform: translateX(-50%); white-space: nowrap; font-size: 9.5px; line-height: 1.2; text-align: center; }
+.ladder .mk.up span { bottom: 30px; } .ladder .mk.dn span { top: 30px; }
+.ladder .mk.ghost { color: rgba(255,79,109,.45); } .ladder .mk.ghost::before { background: repeating-linear-gradient(currentColor 0 3px, transparent 3px 6px); }
+.ladder .mk.stop { color: var(--bad); } .ladder .mk.entry { color: var(--fg); } .ladder .mk.oneR { color: var(--violet); }
+.ladder .mk.oneR::before { background: repeating-linear-gradient(currentColor 0 3px, transparent 3px 6px); }
+.ladder .mk.tgt { color: var(--good); }
+.ladder .px { position: absolute; top: 28px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 0 3px rgba(60,200,255,.25), 0 0 16px var(--cyan); transition: left .6s ease; }
+.ladder .px::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 1px solid var(--cyan); animation: ring 1.6s ease-out infinite; }
+@keyframes ring { from { transform: scale(.6); opacity: 1; } to { transform: scale(1.8); opacity: 0; } }
+.pos .foot { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 10.5px; color: var(--dim); }
+.pos .foot b { color: var(--fg); font-weight: 500; }
+.trail-on { color: var(--gold) !important; }
+.empty { padding: 18px 10px; text-align: center; color: var(--dim); border: 1px dashed var(--faint); font-size: 11.5px; }
+
+/* ---------- events ---------- */
+.events { max-height: 420px; overflow-y: auto; font-size: 11px; display: grid; gap: 1px; }
+.ev { display: grid; grid-template-columns: 58px 62px minmax(0,1fr); gap: 8px; padding: 3px 4px; border-left: 2px solid var(--faint); }
+.ev .ts { color: var(--dim); }
+.ev .kd { font: 600 9.5px/1.6 var(--f-display); letter-spacing: .12em; text-transform: uppercase; }
+.ev .m { overflow-wrap: anywhere; }
+.ev.order { border-color: var(--good); } .ev.order .kd { color: var(--good); }
+.ev.fill { border-color: var(--good); } .ev.fill .kd { color: var(--good); }
+.ev.trail { border-color: var(--gold); } .ev.trail .kd { color: var(--gold); }
+.ev.exit { border-color: var(--cyan); } .ev.exit .kd { color: var(--cyan); }
+.ev.decision .kd { color: var(--teal); }
+.ev.scan .kd, .ev.skip .kd, .ev.start .kd { color: var(--dim); }
+.ev.error { border-color: var(--bad); } .ev.error .kd { color: var(--bad); }
+.ev.flatten, .ev.cancel { border-color: var(--warn); } .ev.flatten .kd, .ev.cancel .kd { color: var(--warn); }
+.ev.review, .ev.score, .ev.tuning { border-color: var(--violet); } .ev.review .kd, .ev.score .kd, .ev.tuning .kd { color: var(--violet); }
+.ev.new { animation: flash 1.2s ease-out; }
+@keyframes flash { from { background: rgba(47,243,210,.18); } to { background: transparent; } }
+
+/* ---------- skyline + heat ---------- */
+.sky-wrap { position: relative; height: clamp(240px, 70vw, 340px); }
+.sky-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.heat { display: grid; gap: 2px; font-size: 10px; }
+.heat .row { display: grid; grid-template-columns: 44px minmax(0,1fr); align-items: center; gap: 6px; }
+.heat .cells { display: grid; gap: 2px; }
+.heat .c { height: 16px; border: 1px solid rgba(255,255,255,.03); }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 6px; margin-bottom: 8px; }
+.stat { border: 1px solid var(--line); padding: 4px 6px; min-width: 0; }
+.stat .l { font-size: 9px; color: var(--dim); letter-spacing: .12em; text-transform: uppercase; }
+.stat .v { font: 600 15px/1.2 var(--f-display); }
+.scale { display: flex; align-items: center; gap: 6px; font-size: 9.5px; color: var(--dim); margin-top: 6px; }
+.scale .bar { flex: 1; height: 6px; background: linear-gradient(90deg, #ff4f6d, #3a1c28 45%, #0d2a2a 55%, #3dff9b); }
+
+/* ---------- self-improvement ---------- */
+.imp-grid { display: grid; grid-template-columns: minmax(0,1fr); gap: 10px; }
+@media (min-width: 1000px) { .imp-grid { grid-template-columns: minmax(0,2fr) minmax(0,1fr); } }
+.props { display: grid; gap: 10px; }
+.prop { border: 1px solid var(--line); background: rgba(0,0,0,.2); padding: 10px; }
+.prop-h { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-bottom: 6px; }
+.prop-h code { color: var(--dim); font-size: 10.5px; }
+.st { font: 600 10px/1 var(--f-display); letter-spacing: .14em; text-transform: uppercase; padding: 3px 6px; border: 1px solid currentColor; }
+.st.passed { color: var(--good); } .st.adopted { color: var(--teal); } .st.failed, .st.rejected, .st.error { color: var(--bad); }
+.st.lessons_only { color: var(--violet); } .st.no_change, .st.no_data { color: var(--dim); }
+.prop p { margin: 4px 0 8px; font-size: 11.5px; color: #b5d5d6; }
+.chg { display: grid; gap: 4px; margin-bottom: 8px; }
+.chg div { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; padding: 4px 6px; border-left: 2px solid var(--violet); background: rgba(154,140,255,.06); }
+.chg .arrow { color: var(--violet); }
+.chg em { color: var(--dim); font-style: normal; flex-basis: 100%; font-size: 10.5px; }
+.cmp { display: grid; grid-template-columns: 92px minmax(0,1fr) 64px; gap: 3px 8px; align-items: center; font-size: 10.5px; margin-bottom: 8px; }
+.cmp .bar { height: 7px; background: var(--faint); position: relative; }
+.cmp .bar i { position: absolute; left: 0; top: 0; bottom: 0; }
+.cmp .base i { background: var(--dim); } .cmp .cand i { background: var(--teal); box-shadow: 0 0 6px rgba(47,243,210,.6); }
+.verd { font-size: 10.5px; color: var(--dim); margin-bottom: 8px; }
+.lessons { margin: 0; padding-left: 16px; font-size: 11px; color: #b5d5d6; }
+.vers { display: grid; gap: 6px; }
+.ver { border: 1px solid var(--line); padding: 6px 8px; font-size: 11px; display: grid; gap: 4px; }
+.ver.cur { border-color: var(--teal); background: rgba(47,243,210,.06); }
+.ver .row1 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ver .row1 b { font: 700 14px/1 var(--f-display); }
+.msg { font-size: 11px; margin-top: 6px; min-height: 1em; }
+
+/* ---------- tape ---------- */
+.tape {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 25; overflow: hidden; white-space: nowrap;
+  border-top: 1px solid var(--line-2); background: rgba(3,8,11,.94);
+  padding: 6px 0 calc(6px + env(safe-area-inset-bottom, 0px));
+  font-size: 11.5px;
+}
+.tape .track { display: inline-block; padding-left: 100%; animation: tape 48s linear infinite; }
+.tape span { margin-right: 28px; }
+.tape b { font-family: var(--f-display); letter-spacing: .06em; margin-right: 6px; }
+@keyframes tape { to { transform: translateX(-100%); } }
+@media (prefers-reduced-motion: reduce) {
+  .tape .track { animation: none; padding-left: 0; }
+  .wrow.planning, .btn.armed, .ladder .px::after { animation: none; }
+}
+.hide { display: none !important; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+      <polygon points="15,1 28,8 28,22 15,29 2,22 2,8" fill="none" stroke="#2ff3d2" stroke-width="1.5"/>
+      <polyline points="7,19 12,14 16,17 23,9" fill="none" stroke="#3cc8ff" stroke-width="2"/>
+      <circle cx="23" cy="9" r="2" fill="#3dff9b"/>
+    </svg>
+    <div>
+      <h1><b>TRADEBOT</b> <span>// DAY OPS</span></h1>
+      <div class="sub" id="subline">Claude plans · code checks · Alpaca executes</div>
+    </div>
+  </div>
+  <div class="chips">
+    <span class="chip info" id="chip-mode"><i></i>—</span>
+    <span class="chip" id="chip-feed"><i></i>connecting</span>
+    <span class="chip" id="chip-phase">—</span>
+    <span class="clock" id="clock">--:--:--<small>ET</small></span>
+  </div>
+</header>
+
+<div class="demo-banner hide" id="demo-banner" role="status">
+  <b>DEMO MODE · SIMULATED DATA</b>
+  <span id="demo-reason">Prices, trades and P&amp;L on this screen are made up by the page. They are not your account and not real results.</span>
+  <button class="btn hide" id="btn-live" type="button">Try live connection</button>
+</div>
+
+<div class="timeline" id="timeline" aria-label="Trading session timeline"></div>
+
+<section class="kpis" id="kpis" aria-label="Account summary"></section>
+
+<main class="grid">
+  <section class="panel s3" aria-labelledby="h-watch">
+    <div class="ph"><h2 id="h-watch">Watchlist scan</h2><span class="meta" id="watch-meta"></span></div>
+    <div class="watch" id="watch"></div>
+    <p class="note">Bars show code's own 6 checks for the last scan. Tap a ticker to inspect it.</p>
+  </section>
+
+  <section class="panel s6" aria-labelledby="h-vortex">
+    <div class="ph"><h2 id="h-vortex">Decision vortex</h2><span class="meta">tickers orbit the planner · beam = being planned now</span></div>
+    <div class="vortex-wrap" id="vortex-wrap">
+      <canvas id="vortex-trails"></canvas>
+      <canvas id="vortex" aria-label="Animated view of the bot scanning tickers"></canvas>
+      <div class="vortex-hud"><span>next scan <b id="hud-next">—</b></span><span>last scan <b id="hud-last">—</b></span><span>model <b id="hud-model">—</b></span></div>
+    </div>
+  </section>
+
+  <section class="panel s3" aria-labelledby="h-risk">
+    <div class="ph"><h2 id="h-risk">Risk limits</h2><span class="meta">used / allowed</span></div>
+    <div class="gauges" id="gauges"></div>
+    <div class="limits" id="limits"></div>
+  </section>
+
+  <section class="panel s7" aria-labelledby="h-matrix">
+    <div class="ph"><h2 id="h-matrix">Setup checklist</h2><span class="meta">code recomputes every item · all 6 must pass</span></div>
+    <div class="scroll-x"><table class="matrix" id="matrix"></table></div>
+    <div class="legend">
+      <span><i style="background:var(--teal)"></i>pass</span>
+      <span><i style="background:var(--bad)"></i>fail</span>
+      <span><i style="background:var(--warn);border-radius:50%"></i>Claude's own checklist disagreed</span>
+    </div>
+  </section>
+
+  <section class="panel s5" aria-labelledby="h-plan">
+    <div class="ph"><h2 id="h-plan">Claude's plan</h2><span class="meta" id="plan-meta"></span></div>
+    <div id="plan"></div>
+  </section>
+
+  <section class="panel s8" aria-labelledby="h-pos">
+    <div class="ph"><h2 id="h-pos">Open positions</h2><span class="meta">bracket orders · stop trails 1R behind once up 1R</span></div>
+    <div class="positions" id="positions"></div>
+  </section>
+
+  <section class="panel s4" aria-labelledby="h-ev">
+    <div class="ph"><h2 id="h-ev">Event log</h2><span class="meta" id="ev-meta"></span></div>
+    <div class="events" id="events" aria-live="polite"></div>
+  </section>
+
+  <section class="panel s8" aria-labelledby="h-sky">
+    <div class="ph"><h2 id="h-sky">Scan skyline</h2><span class="meta">height = checks passed · one tower per scan · green = order approved</span></div>
+    <div class="sky-wrap"><canvas id="sky" aria-label="3D chart of checklist results over today's scans"></canvas></div>
+  </section>
+
+  <section class="panel s4" aria-labelledby="h-heat">
+    <div class="ph"><h2 id="h-heat">Replay scores</h2><span class="meta" id="heat-meta">last 30 days</span></div>
+    <div id="heat"></div>
+  </section>
+
+  <section class="panel s12" aria-labelledby="h-imp" style="grid-column: span 12">
+    <div class="ph"><h2 id="h-imp">Self-improvement</h2><span class="meta">daily review → proposal → 30-day replay test → your approval</span></div>
+    <div class="imp-grid">
+      <div class="props" id="props"></div>
+      <div>
+        <div class="ph"><h2>Settings versions</h2></div>
+        <div class="vers" id="versions"></div>
+        <div class="msg" id="imp-msg" role="status"></div>
+        <div class="ph" style="margin-top:12px"><h2>Lessons shown to the planner</h2></div>
+        <ul class="lessons" id="lessons"></ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="tape" aria-hidden="true"><div class="track" id="tape"></div></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   Helpers
+   ===================================================================== */
+const $ = (s, el = document) => el.querySelector(s);
+const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const num = (v, d = 2) => (v == null || !isFinite(v) ? "—" : Number(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d }));
+const money = (v, d = 2) => (v == null || !isFinite(v) ? "—" : (v < 0 ? "-$" : "$") + num(Math.abs(v), d));
+const signed = (v, d = 2, suf = "") => (v == null || !isFinite(v) ? "—" : (v >= 0 ? "+" : "") + num(v, d) + suf);
+const smoney = (v) => (v == null || !isFinite(v) ? "—" : (v >= 0 ? "+$" : "-$") + num(Math.abs(v), 2));
+const cls = (v) => (v > 0 ? "up" : v < 0 ? "dn" : "muted");
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+const reduceMotion = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+const ITEMS = ["catalyst", "relative_volume", "liquidity", "trend", "clean_level", "reward_risk"];
+const ITEM_LABEL = { catalyst: "Catalyst", relative_volume: "Rel vol", liquidity: "Liquidity", trend: "VWAP trend", clean_level: "Level", reward_risk: "R:R" };
+
+function etParts(ms) {
+  const f = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const p = Object.fromEntries(f.formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+  const h = +p.hour % 24, m = +p.minute, s = +p.second;
+  return { h, m, s, min: h * 60 + m + s / 60 };
+}
+const hhmm = (min) => String(Math.floor(min / 60)).padStart(2, "0") + ":" + String(Math.floor(min % 60)).padStart(2, "0");
+const hhmmss = (min) => hhmm(min) + ":" + String(Math.floor((min * 60) % 60)).padStart(2, "0");
+const parseHM = (s) => { const [h, m] = String(s).split(":").map(Number); return h * 60 + m; };
+
+/* Short values for matrix cells, from the checklist's value text. */
+function shortVal(item, value) {
+  const v = String(value || "");
+  let m;
+  if (item === "catalyst") return (m = v.match(/^([\d.]+)h/)) ? m[1] + "h" : "none";
+  if (item === "relative_volume") return (m = v.match(/^([\d.]+)x/)) ? m[1] + "x" : "—";
+  if (item === "liquidity") return (m = v.match(/spread ([\d.]+)%/)) ? m[1] + "%" : "—";
+  if (item === "trend") { m = v.match(/price ([\d.]+) vs VWAP ([\d.]+)/); return m ? (m[1] - m[2] >= 0 ? "+" : "") + (m[1] - m[2]).toFixed(2) : "—"; }
+  if (item === "clean_level") return (m = v.match(/level ([\d.]+)/)) ? m[1] : "none";
+  if (item === "reward_risk") return (m = v.match(/^([\d.]+):1/)) ? m[1] + ":1" : "—";
+  return "";
+}
+
+/* =====================================================================
+   Data source: live (the bot's dashboard server) or demo (simulated)
+   ===================================================================== */
+let D = null;            // current state, same shape for live and demo
+let MODE = "live";
+let selected = store.get("tb.sel");
+let token = null;
+let liveOK = false;
+let lastFetch = 0;
+let seenEvents = new Set();
+
+(function readToken() {
+  const m = location.hash.match(/token=([A-Za-z0-9_\-]+)/);
+  if (m) {
+    token = m[1];
+    store.set("tb.token", token);
+    try { history.replaceState(null, "", location.pathname + location.search); } catch {}
+  } else token = store.get("tb.token");
+})();
+
+async function fetchLive() {
+  const r = await fetch("api/state", { headers: { "X-Token": token || "" }, cache: "no-store" });
+  if (!r.ok) throw new Error(r.status === 401 ? "wrong or missing access token" : "server said " + r.status);
+  return r.json();
+}
+async function postLive(path, body) {
+  const r = await fetch(path, { method: "POST", headers: { "X-Token": token || "", "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "request failed (" + r.status + ")");
+  return j;
+}
+
+async function pollLive() {
+  if (MODE !== "live") return;
+  try {
+    D = await fetchLive();
+    liveOK = true; lastFetch = Date.now();
+    renderAll();
+  } catch (e) {
+    if (!liveOK) { startDemo("Couldn't reach the bot's dashboard server (" + e.message + "). Showing a simulation instead."); return; }
+    setFeed("bad", "offline");
+  }
+  setTimeout(pollLive, 3000);
+}
+
+/* =====================================================================
+   Demo simulator. Everything here is invented and labeled as such.
+   ===================================================================== */
+const SIM = {};
+function rnd(a, b) { return a + Math.random() * (b - a); }
+function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+const r2 = (v) => Math.round(v * 100) / 100;
+
+function simInit() {
+  const base = { AAPL: [231.4, 52e6], NVDA: [184.2, 210e6], TSLA: [352.8, 96e6], AMD: [162.5, 46e6], MSFT: [468.1, 21e6], META: [702.3, 14e6] };
+  Object.assign(SIM, {
+    speed: 20, etMin: 10 * 60 + 34, equity0: 100000, realized: 0, tradesToday: 0,
+    t: {}, positions: [], scans: [], events: [], outcomes: [], queue: [], planning: null, planT: 0,
+    lastScanMin: null, nextScanMin: 10 * 60 + 35, manageT: 0, day: 0, flattened: false, cancelled: false,
+  });
+  for (const [k, [px, adv]] of Object.entries(base)) {
+    SIM.t[k] = {
+      px, open: px * rnd(.992, 1.008), prev: px * rnd(.985, 1.015), vwap: px * rnd(.996, 1.004), atr: px * rnd(.017, .028),
+      adv, rv: rnd(.8, 2.6), spread: rnd(.006, .03), drift: 0, newsAge: Math.random() < .5 ? rnd(1, 20) : rnd(26, 60),
+      hi: px * 1.006, lo: px * .994, hist: [], headline: null,
+    };
+    simHeadline(k);
+  }
+  // A strong setup already in play so the page opens with a live trade.
+  const n = SIM.t.NVDA; n.rv = 3.4; n.newsAge = 2.2; n.drift = 3e-6; n.px = n.vwap * 1.012;
+  simSeedHistory();
+  { const m0 = SIM.etMin; SIM.etMin = 9 * 60 + 31; simEvent("start", "Runner started in paper mode"); SIM.etMin = m0; }
+  // Earlier scans this (simulated) morning, so the skyline and timeline have history.
+  const startMin = SIM.etMin;
+  for (let m = 585; m < startMin - 2; m += 5) {
+    SIM.etMin = m;
+    for (const t of Object.values(SIM.t)) {
+      t.px *= 1 + gauss() * .002; t.vwap += (t.px - t.vwap) * .3; t.hi = Math.max(t.hi, t.px); t.lo = Math.min(t.lo, t.px);
+      t.rv = clamp(t.rv + gauss() * .35, .5, 5); t.spread = clamp(t.spread + gauss() * .01, .004, .14);
+    }
+    simEvent("scan", "Scan started: " + Object.keys(SIM.t).join(", "));
+    for (const k of Object.keys(SIM.t)) {
+      const rec = simPlan(k, true);
+      if (rec.decision.approved && SIM.tradesToday < 2) { // that trade already ran and closed
+        SIM.tradesToday++;
+        const r = Math.random() < .5 ? -1 : rnd(.6, 2.3), risk = SIM.equity0 * .005;
+        rec.order_id = "sim-" + rec.id.slice(0, 6);
+        SIM.realized += r * risk;
+        simEvent("order", `${k}: ${rec.decision.action} ${rec.decision.qty} @ ${rec.decision.entry} stop ${rec.decision.stop} target ${rec.decision.target}`, { ticker: k });
+        simEvent("exit", `${k}: ${r < 0 ? "stop hit" : "trailing stop hit"} · ${r >= 0 ? "+" : ""}${r.toFixed(2)}R · ${r >= 0 ? "+" : "-"}$${Math.abs(r * risk).toFixed(2)} (simulated)`, { ticker: k });
+      } else if (rec.decision.approved) rec.decision = { ...rec.decision, approved: false, action: "NO_TRADE", reasons: ["max trades per day reached"] };
+    }
+  }
+  SIM.etMin = startMin;
+  for (const k of Object.keys(SIM.t)) simPlan(k, true);
+  SIM.lastScanMin = startMin;
+  const entry = r2(n.px - .9 * .35 * n.atr), stop = r2(entry - .35 * n.atr);
+  simOpen("NVDA", "long", entry, stop, r2(entry + 2.4 * (entry - stop)), true);
+  n.px = entry + 1.15 * (entry - stop);
+}
+const HEADLINES = {
+  AAPL: ["Apple supplier data points to firmer handset orders", "Apple expands services bundle pricing"],
+  NVDA: ["Nvidia lands multi-year data-center supply deal", "Nvidia raised to Buy at a major broker"],
+  TSLA: ["Tesla delivery estimates trimmed by analysts", "Tesla announces new energy storage contract"],
+  AMD: ["AMD unveils next-gen accelerator roadmap", "AMD wins cloud instance deal"],
+  MSFT: ["Microsoft cloud unit signs government contract", "Microsoft prices new bond offering"],
+  META: ["Meta ad pricing checks come in firm", "Meta faces new regulatory inquiry in EU"],
+};
+function simHeadline(k) { const h = HEADLINES[k]; SIM.t[k].headline = h[Math.floor(Math.random() * h.length)] + " (simulated)"; }
+
+function simSeedHistory() {
+  const ks = Object.keys(SIM.t);
+  for (let d = 22; d >= 1; d--) {
+    for (const k of ks) {
+      const n = Math.random() < .55 ? Math.floor(rnd(1, 3.6)) : 0;
+      for (let i = 0; i < n; i++) {
+        const u = Math.random();
+        let r, reason, trig = true;
+        if (u < .40) { r = -1; reason = "stop"; }
+        else if (u < .63) { r = rnd(2, 2.6); reason = "target"; }
+        else if (u < .83) { r = rnd(.2, 1.8); reason = "trail"; }
+        else if (u < .95) { r = rnd(-.5, .8); reason = "flatten"; }
+        else { r = 0; reason = "not_triggered"; trig = false; }
+        const ts = new Date(Date.now() - d * 864e5).toISOString();
+        SIM.outcomes.push({ record_id: "sim" + d + k + i, ticker: k, ts, direction: Math.random() < .7 ? "long" : "short", approved: Math.random() < .6, traded: Math.random() < .4, triggered: trig, exit_reason: reason, r_multiple: Math.round(r * 100) / 100 });
+      }
+    }
+  }
+  SIM.tuning = {
+    active: { version: 2, adopted_at: new Date(Date.now() - 6 * 864e5).toISOString(), note: "approved proposal 20261118-161204-7c1e02", changes: { "setup.max_level_distance_atr": 1.2, "risk.min_confidence": 0.65 }, lessons: ["Skip catalyst gaps when relative volume fades under 2.5x after 10:30 ET.", "Prefer stops under the prior-day high when it sits within 0.5 ATR of entry."] },
+    history: [
+      { version: 1, adopted_at: new Date(Date.now() - 13 * 864e5).toISOString(), note: "approved proposal 20261111-160733-1fa9d0", changes: { "setup.max_level_distance_atr": 1.2 }, lessons: ["Skip catalyst gaps when relative volume fades under 2.5x after 10:30 ET."] },
+      { version: 2, adopted_at: new Date(Date.now() - 6 * 864e5).toISOString(), note: "approved proposal 20261118-161204-7c1e02", changes: { "setup.max_level_distance_atr": 1.2, "risk.min_confidence": 0.65 }, lessons: ["Skip catalyst gaps when relative volume fades under 2.5x after 10:30 ET.", "Prefer stops under the prior-day high when it sits within 0.5 ATR of entry."] },
+    ],
+  };
+  SIM.proposals = [
+    { id: "20261118-161204-7c1e02", created_at: new Date(Date.now() - 6 * 864e5).toISOString(), based_on_version: 1, status: "adopted", adopted_version: 2,
+      summary: "Low-confidence plans (below 0.65) lost more often than they won in the last 30 days. Raising the bar removes most of them.",
+      changes: { "risk.min_confidence": 0.65 }, rationales: { "risk.min_confidence": "Plans at 0.60-0.65 confidence averaged -0.31R over 14 trades." },
+      baseline: { plans: 188, trades: 58, wins: 22, total_r: 4.1, expectancy_r: 0.071, max_drawdown_r: 6.2 },
+      candidate: { plans: 188, trades: 44, wins: 19, total_r: 7.9, expectancy_r: 0.18, max_drawdown_r: 4.4 }, verdict: "expectancy +0.180R vs +0.071R over 44 trades" },
+    { id: "20261124-160951-b2d4aa", created_at: new Date(Date.now() - 2 * 864e5).toISOString(), based_on_version: 2, status: "failed",
+      summary: "Several winners gave back gains before the trail engaged. Trailing earlier was tested.",
+      changes: { "exits.trail_after_r": 0.5 }, rationales: { "exits.trail_after_r": "Seven trades reached +0.7R and then stopped out at -1R." },
+      baseline: { plans: 205, trades: 47, wins: 20, total_r: 8.3, expectancy_r: 0.177, max_drawdown_r: 4.4 },
+      candidate: { plans: 205, trades: 47, wins: 26, total_r: 5.2, expectancy_r: 0.111, max_drawdown_r: 3.1 }, verdict: "expectancy +0.111R vs baseline +0.177R (need +0.05R)" },
+    { id: "20261125-160512-a13f6c", created_at: new Date(Date.now() - 1 * 864e5).toISOString(), based_on_version: 2, status: "passed",
+      summary: "Setups with relative volume between 2x and 2.5x rarely reached target. Requiring 2.5x keeps the best trades and cuts the weak ones.",
+      changes: { "setup.min_relative_volume": 2.5 }, rationales: { "setup.min_relative_volume": "Trades at 2.0-2.5x averaged -0.22R over 15 trades; above 2.5x averaged +0.34R." },
+      lessons: ["Skip catalyst gaps when relative volume fades under 2.5x after 10:30 ET.", "Prefer stops under the prior-day high when it sits within 0.5 ATR of entry.", "Treat analyst-rating headlines as weak catalysts unless volume confirms."],
+      baseline: { plans: 212, trades: 49, wins: 21, total_r: 8.7, expectancy_r: 0.178, max_drawdown_r: 4.4 },
+      candidate: { plans: 212, trades: 36, wins: 18, total_r: 9.6, expectancy_r: 0.267, max_drawdown_r: 3.0 }, verdict: "expectancy +0.267R vs +0.178R over 36 trades" },
+  ];
+}
+
+function simEvent(kind, msg, data = {}, level = "info") {
+  SIM.events.push({ ts: simISO(), kind, level, msg, ...data, _id: Math.random().toString(36).slice(2) });
+  if (SIM.events.length > 220) SIM.events.splice(0, SIM.events.length - 220);
+}
+function simISO() {
+  // A timestamp whose ET wall-clock time is the simulated time.
+  const now = new Date(); const p = etParts(now.getTime());
+  return new Date(now.getTime() + (SIM.etMin - p.min) * 60000).toISOString();
+}
+function simCfg() {
+  return {
+    mode: "paper",
+    setup: { catalyst_max_age_hours: 24, min_relative_volume: 2, min_avg_daily_volume: 1e6, max_spread_pct: 0.1, min_reward_risk: 2, max_level_distance_atr: SIM.tuning.active.changes["setup.max_level_distance_atr"] ?? 1.5 },
+    exits: { trail_after_r: 1, trail_distance_r: 1, flatten_time_et: "15:50", stop_atr_multiple: 1.5 },
+    session: { no_entries_before_et: "09:45", no_entries_after_et: "15:30", scan_interval_seconds: 300, manage_interval_seconds: 30 },
+    risk: { risk_per_trade_pct: 0.5, max_position_pct: 20, max_open_positions: 3, max_trades_per_day: 5, daily_loss_limit_pct: 2, min_confidence: SIM.tuning.active.changes["risk.min_confidence"] ?? 0.6 },
+    model: "claude-opus-5-5", lessons: SIM.tuning.active.lessons, auto_apply: false,
+  };
+}
+
+function simSnapshot(k) {
+  const t = SIM.t[k], a = t.atr, px = t.px;
+  const sup = [r2(px - a * rnd(.12, .55)), r2(px - a * rnd(.7, 1.3)), r2(t.lo)].sort((x, y) => y - x);
+  const res = [r2(px + a * rnd(.35, 1.6)), r2(px + a * rnd(1.7, 2.6)), r2(t.hi)].sort((x, y) => x - y);
+  const frac = clamp((SIM.etMin - 570) / 390, .02, 1);
+  return {
+    ticker: k, as_of: simISO(), last_price: r2(px), bid: r2(px - px * t.spread / 200), ask: r2(px + px * t.spread / 200), spread_pct: t.spread,
+    vwap: r2(t.vwap), atr: r2(a), avg_daily_volume: t.adv, today_volume: Math.round(t.adv * frac * t.rv), session_fraction_elapsed: frac,
+    relative_volume: t.rv, day_high: r2(t.hi), day_low: r2(t.lo), prior_close: r2(t.prev), supports: sup.filter((v) => v < px), resistances: res.filter((v) => v > px),
+    news: t.newsAge < 48 ? [{ headline: t.headline, age_hours: Math.round(t.newsAge * 10) / 10, source: "sim" }] : [], missing: [],
+  };
+}
+
+function simChecklist(s, dir, entry, stop, target, cfg) {
+  const st = cfg.setup, items = [];
+  const it = (item, ok, value) => items.push({ item, value, result: ok ? "PASS" : "FAIL" });
+  const n = s.news[0];
+  n && n.age_hours < st.catalyst_max_age_hours ? it("catalyst", true, `${n.age_hours.toFixed(1)}h old: ${n.headline}`) : it("catalyst", false, `no news < ${st.catalyst_max_age_hours}h`);
+  it("relative_volume", s.relative_volume > st.min_relative_volume, `${s.relative_volume.toFixed(2)}x (need > ${st.min_relative_volume}x)`);
+  it("liquidity", s.avg_daily_volume > st.min_avg_daily_volume && s.spread_pct < st.max_spread_pct, `avg vol ${Math.round(s.avg_daily_volume).toLocaleString("en-US")}, spread ${s.spread_pct.toFixed(3)}% (need > 1,000,000 and < ${st.max_spread_pct}%)`);
+  it("trend", dir === "long" ? s.last_price > s.vwap : s.last_price < s.vwap, `price ${s.last_price.toFixed(2)} vs VWAP ${s.vwap.toFixed(2)} (need ${dir === "long" ? "above" : "below"})`);
+  const lv = dir === "long" ? s.supports[0] : s.resistances[0];
+  if (entry == null) it("clean_level", false, "entry, stop or ATR missing");
+  else {
+    const ok = lv != null && Math.abs(entry - lv) <= st.max_level_distance_atr * s.atr && (dir === "long" ? stop <= lv : stop >= lv);
+    it("clean_level", ok, `level ${lv == null ? "none" : lv.toFixed(2)}, stop ${stop.toFixed(2)}, entry ${entry.toFixed(2)}, ATR ${s.atr.toFixed(2)}`);
+  }
+  if (entry == null) it("reward_risk", false, "entry, stop or target missing");
+  else {
+    const nxt = dir === "long" ? s.resistances.find((v) => v > entry) : s.resistances.length && s.supports.find((v) => v < entry);
+    const eff = dir === "long" ? Math.min(target, nxt ?? target) : Math.max(target, nxt ?? target);
+    const rr = Math.abs(eff - entry) / Math.abs(entry - stop);
+    it("reward_risk", rr >= st.min_reward_risk, `${rr.toFixed(2)}:1 to ${eff.toFixed(2)} (need >= ${st.min_reward_risk}:1)`);
+  }
+  return items;
+}
+
+function simPlan(k, quiet) {
+  const cfg = simCfg(), s = simSnapshot(k), t = SIM.t[k];
+  const dir = s.last_price >= s.vwap ? "long" : "short";
+  const lv = dir === "long" ? s.supports[0] : s.resistances[0];
+  let entry = null, stop = null, target = null;
+  if (lv != null) {
+    entry = r2(s.last_price + (dir === "long" ? .01 : -.01));
+    stop = r2(dir === "long" ? lv - .08 * s.atr : lv + .08 * s.atr);
+    const R = Math.abs(entry - stop);
+    target = r2(dir === "long" ? entry + 2.4 * R : entry - 2.4 * R);
+    if (dir === "long" && s.resistances[0] && s.resistances[0] < target && Math.random() < .5) target = s.resistances[0];
+  }
+  const code = simChecklist(s, dir, entry, stop, target, cfg);
+  const allPass = code.every((c) => c.result === "PASS");
+  // Claude's own checklist: usually the same, sometimes it judges the catalyst immaterial.
+  const claude = code.map((c, i) => ({ item: ["1. Catalyst", "2. Relative volume", "3. Liquidity", "4. Trend", "5. Clean level", "6. Reward:risk"][i], value: c.value.split(" (need")[0], result: c.result }));
+  let immaterial = allPass && Math.random() < .15;
+  if (immaterial) { claude[0].result = "FAIL"; claude[0].value += " — not material to the stock"; }
+  const action = allPass && !immaterial ? (dir === "long" ? "BUY" : "SHORT") : "NO_TRADE";
+  const conf = action === "NO_TRADE" ? r2(rnd(.15, .45)) : r2(rnd(.6, .88));
+  const plan = {
+    ticker: k, mode: "DAY", action, checklist: claude,
+    entry_trigger: action === "NO_TRADE" ? null : entry, stop: action === "NO_TRADE" ? null : stop, target: action === "NO_TRADE" ? null : target,
+    rr_ratio: action === "NO_TRADE" ? null : r2(Math.abs(target - entry) / Math.abs(entry - stop)),
+    invalidation: action === "NO_TRADE" ? "No trade: " + (code.filter((c) => c.result === "FAIL").map((c) => c.item).join(", ") || "catalyst not material") : `Close ${dir === "long" ? "below" : "above"} ${lv.toFixed(2)} on 5-minute bars`,
+    confidence: conf,
+  };
+  // Risk gate
+  const reasons = []; let approved = false, qty = 0;
+  const held = SIM.positions.some((p) => p.symbol === k);
+  if (action === "NO_TRADE") reasons.push("planner chose NO_TRADE");
+  else {
+    const failed = code.filter((c) => c.result === "FAIL").map((c) => c.item);
+    if (failed.length) reasons.push("checklist failed: " + failed.join(", "));
+    if (conf < cfg.risk.min_confidence) reasons.push(`confidence ${conf.toFixed(2)} < ${cfg.risk.min_confidence.toFixed(2)}`);
+    if (SIM.etMin < 585 || SIM.etMin >= 930) reasons.push("outside entry window");
+    if (held) reasons.push("already have a position or order in this ticker");
+    if (SIM.positions.length >= cfg.risk.max_open_positions) reasons.push("max open positions reached");
+    if (SIM.tradesToday >= cfg.risk.max_trades_per_day) reasons.push("max trades per day reached");
+    if (simDayPnlPct() <= -cfg.risk.daily_loss_limit_pct) reasons.push("daily loss limit hit");
+    const eq = simEquity();
+    qty = Math.floor(Math.min(eq * .005 / Math.abs(entry - stop), eq * .2 / entry));
+    if (qty < 1) reasons.push("position size rounds to 0 shares");
+    approved = !reasons.length;
+  }
+  const decision = { ticker: k, approved, action: approved ? action : "NO_TRADE", reasons, checklist: action === "NO_TRADE" ? [] : code, entry: approved ? entry : null, stop: approved ? stop : null, target: approved ? target : null, rr_ratio: approved ? plan.rr_ratio : null, qty: approved ? qty : 0 };
+  const rec = { id: Math.random().toString(36).slice(2), ts: simISO(), ticker: k, snapshot: s, plan, decision, code_checklist: code, code_checklist_source: action === "NO_TRADE" ? `display (${dir})` : "gate", order_id: null };
+  if (approved && !quiet) {
+    rec.order_id = "sim-" + rec.id.slice(0, 6);
+    simEvent("order", `${k}: ${action} ${qty} @ ${entry} stop ${stop} target ${target}`, { ticker: k });
+    simOpen(k, dir, entry, stop, target);
+  }
+  SIM.scans.push(rec);
+  if (SIM.scans.length > 400) SIM.scans.shift();
+  if (!quiet) simEvent("decision", `${k}: ${approved ? action : "NO_TRADE"}${approved ? "" : " (" + reasons.join("; ").slice(0, 150) + ")"}`, { ticker: k, approved });
+  return rec;
+}
+
+function simOpen(k, dir, entry, stop, target, quiet) {
+  const eq = simEquity();
+  const qty = Math.max(1, Math.floor(Math.min(eq * .005 / Math.abs(entry - stop), eq * .2 / entry)));
+  SIM.positions.push({ symbol: k, direction: dir, qty: dir === "long" ? qty : -qty, entry, avg_entry: entry, initial_stop: stop, stop, target, lastTrailR: 0 });
+  SIM.tradesToday++;
+  const t = SIM.t[k]; t.drift = (dir === "long" ? 1 : -1) * rnd(0, 4e-6); // momentum, may or may not continue
+  if (!quiet) simEvent("fill", `${k}: entry filled ${dir === "long" ? "long" : "short"} ${qty} @ ${entry.toFixed(2)}`, { ticker: k });
+}
+function simUnreal() { return SIM.positions.reduce((s, p) => s + (SIM.t[p.symbol].px - p.avg_entry) * p.qty, 0); }
+function simEquity() { return SIM.equity0 + SIM.realized + simUnreal(); }
+function simDayPnlPct() { return (simEquity() - SIM.equity0) / SIM.equity0 * 100; }
+
+function simClose(p, price, why) {
+  const pnl = (price - p.avg_entry) * p.qty;
+  const R = Math.abs(p.entry - p.initial_stop);
+  const r = (p.direction === "long" ? price - p.entry : p.entry - price) / R;
+  SIM.realized += pnl;
+  SIM.positions = SIM.positions.filter((x) => x !== p);
+  simEvent("exit", `${p.symbol}: ${why} at ${price.toFixed(2)} · ${r >= 0 ? "+" : ""}${r.toFixed(2)}R · ${pnl >= 0 ? "+" : "-"}$${Math.abs(pnl).toFixed(2)} (simulated)`, { ticker: p.symbol });
+  SIM.t[p.symbol].drift = 0;
+}
+
+function simStep(dtReal) {
+  const dt = dtReal * SIM.speed; // simulated seconds
+  SIM.etMin += dt / 60;
+  for (const [k, t] of Object.entries(SIM.t)) {
+    const sig = 1.3e-4 * Math.sqrt(dt);
+    t.px *= 1 + t.drift * dt + sig * gauss();
+    t.vwap += (t.px - t.vwap) * Math.min(1, dt / 2400);
+    t.hi = Math.max(t.hi, t.px); t.lo = Math.min(t.lo, t.px);
+    t.rv = clamp(t.rv + gauss() * .01 * Math.sqrt(dt) - (t.rv - 1.6) * dt / 9000, .4, 6);
+    t.spread = clamp(t.spread + gauss() * .0006 * Math.sqrt(dt), .004, .14);
+    t.newsAge += dt / 3600;
+    if (Math.random() < dt / 9000) { // a fresh catalyst arrives
+      t.newsAge = rnd(.1, 1); simHeadline(k); t.rv = clamp(t.rv + rnd(.8, 2), .4, 6); t.drift = (Math.random() < .5 ? -1 : 1) * rnd(1e-6, 5e-6);
+      simEvent("news", `${k}: fresh headline for the next scan (simulated)`, { ticker: k });
+    }
+    if (Math.random() < dt / 4000) t.drift *= .3;
+  }
+  // Manage positions every 30 simulated seconds.
+  SIM.manageT += dt;
+  if (SIM.manageT >= 30) {
+    SIM.manageT = 0;
+    for (const p of [...SIM.positions]) {
+      const px = SIM.t[p.symbol].px, R = Math.abs(p.entry - p.initial_stop), long = p.direction === "long";
+      if (long ? px <= p.stop : px >= p.stop) { simClose(p, p.stop, p.stop !== p.initial_stop ? "trailing stop hit" : "stop hit"); continue; }
+      if (long ? px >= p.target : px <= p.target) { simClose(p, p.target, "target hit"); continue; }
+      const moved = long ? px - p.entry : p.entry - px;
+      if (moved >= R) {
+        const ns = r2(long ? px - R : px + R);
+        if (long ? ns > p.stop : ns < p.stop) {
+          const old = p.stop; p.stop = ns;
+          if (Math.abs(ns - (p.lastEv ?? p.initial_stop)) >= .15 * R) { p.lastEv = ns; simEvent("trail", `${p.symbol}: stop trailed ${old.toFixed(2)} → ${ns.toFixed(2)} (price ${px.toFixed(2)})`, { ticker: p.symbol }); }
+        }
+      }
+    }
+  }
+  // Session events
+  if (!SIM.cancelled && SIM.etMin >= 930) { SIM.cancelled = true; simEvent("cancel", "Entry window closed: unfilled entries cancelled"); }
+  if (!SIM.flattened && SIM.etMin >= 950) {
+    SIM.flattened = true;
+    for (const p of [...SIM.positions]) simClose(p, SIM.t[p.symbol].px, "flattened at 15:50");
+    simEvent("flatten", "Flattened everything at 15:50 ET");
+    simEvent("score", "Scored today's plans by replaying them on later bars (simulated)");
+    simEvent("review", "Self-review drafted a proposal; replay test pending (simulated)");
+  }
+  if (SIM.etMin >= 965) { // next simulated morning
+    SIM.etMin = 9 * 60 + 50; SIM.flattened = false; SIM.cancelled = false; SIM.realized = 0; SIM.tradesToday = 0; SIM.scans = [];
+    SIM.equity0 = Math.round(simEquity() * 100) / 100; SIM.nextScanMin = SIM.etMin + .2;
+    for (const t of Object.values(SIM.t)) { t.prev = t.px; t.open = t.px; t.vwap = t.px; t.hi = t.px; t.lo = t.px; }
+    simEvent("start", "New simulated session started");
+  }
+  // Scanning: one ticker at a time, every 5 simulated minutes, inside the entry window.
+  if (SIM.planning) {
+    SIM.planT -= dtReal;
+    if (SIM.planT <= 0) {
+      simPlan(SIM.planning);
+      SIM.planning = SIM.queue.shift() || null;
+      SIM.planT = 1.4;
+      if (!SIM.planning) SIM.lastScanMin = SIM.etMin;
+    }
+  } else if (SIM.etMin >= SIM.nextScanMin && SIM.etMin >= 585 && SIM.etMin < 930) {
+    const ks = Object.keys(SIM.t).filter((k) => !SIM.positions.some((p) => p.symbol === k));
+    simEvent("scan", "Scan started: " + Object.keys(SIM.t).join(", "));
+    for (const p of SIM.positions) simEvent("skip", `${p.symbol}: already held or ordered`, { ticker: p.symbol });
+    SIM.queue = ks; SIM.planning = SIM.queue.shift() || null; SIM.planT = 1.4;
+    SIM.nextScanMin = SIM.etMin + 5;
+  }
+}
+
+function simState() {
+  const eq = simEquity(), cfg = simCfg();
+  const positions = SIM.positions.map((p) => {
+    const px = SIM.t[p.symbol].px, R = Math.abs(p.entry - p.initial_stop), mv = p.direction === "long" ? px - p.avg_entry : p.avg_entry - px;
+    return { symbol: p.symbol, direction: p.direction, qty: p.qty, avg_entry: p.avg_entry, current_price: px, entry: p.entry, initial_stop: p.initial_stop, stop: p.stop, target: p.target, unrealized_pnl: mv * Math.abs(p.qty), r_multiple: mv / R, trailing: p.stop !== p.initial_stop, managed: true };
+  });
+  const phase = SIM.etMin < 585 ? "warmup" : SIM.etMin < 930 ? "entry_window" : SIM.etMin < 950 ? "managing_only" : "flattened";
+  return {
+    demo: true, server_time: simISO(), stale: false, watchlist: Object.keys(SIM.t), trading_day: "simulated",
+    status: {
+      mode: "paper", phase, scan_interval_seconds: 300, updated_at: simISO(), age_seconds: 0,
+      last_scan_at: SIM.lastScanMin, next_scan_min: SIM.nextScanMin,
+      activity: SIM.planning ? { kind: "planning", ticker: SIM.planning } : { kind: phase === "flattened" ? "flattened" : "idle" },
+      account: { equity: eq, start_of_day_equity: SIM.equity0, buying_power: eq * 2, day_pnl: eq - SIM.equity0, day_pnl_pct: (eq - SIM.equity0) / SIM.equity0 * 100 },
+      positions, pending_entries: [],
+      limits: {
+        trades_today: SIM.tradesToday, max_trades_per_day: 5, open_positions: positions.length, max_open_positions: 3, daily_loss_limit_pct: 2, risk_per_trade_pct: .5, max_position_pct: 20,
+        open_risk: positions.reduce((s, p) => s + Math.max(0, (p.direction === "long" ? p.current_price - p.stop : p.stop - p.current_price)) * Math.abs(p.qty), 0),
+        exposure: positions.reduce((s, p) => s + Math.abs(p.qty) * p.current_price, 0),
+      },
+    },
+    config: cfg,
+    tunable: {
+      "setup.min_relative_volume": { current: 2, bounds: [2, 6] }, "exits.trail_after_r": { current: 1, bounds: [.5, 3] },
+      "risk.min_confidence": { current: cfg.risk.min_confidence, bounds: [.6, .95] }, "setup.max_level_distance_atr": { current: cfg.setup.max_level_distance_atr, bounds: [.25, 1.5] },
+    },
+    scans: SIM.scans, events: SIM.events, outcomes: SIM.outcomes, tuning: SIM.tuning, proposals: SIM.proposals,
+  };
+}
+
+function simApprove(id) {
+  const p = SIM.proposals.find((x) => x.id === id);
+  if (!p || !["passed", "lessons_only"].includes(p.status)) throw new Error("only passed proposals can be adopted");
+  if (p.based_on_version !== SIM.tuning.active.version) throw new Error("settings changed since this proposal was made; run a new review");
+  const v = SIM.tuning.active.version + 1;
+  const doc = { version: v, adopted_at: new Date().toISOString(), note: "approved proposal " + id, changes: { ...SIM.tuning.active.changes, ...p.changes }, lessons: p.lessons || SIM.tuning.active.lessons };
+  SIM.tuning.history.push(doc); SIM.tuning.active = doc; p.status = "adopted"; p.adopted_version = v;
+  simEvent("tuning", `Adopted proposal ${id} as v${v} (simulated)`);
+  return v;
+}
+function simRollback(to) {
+  const cur = SIM.tuning.active.version, target = to ?? cur - 1;
+  if (target < 0 || target >= cur) throw new Error(`cannot roll back from v${cur} to v${target}`);
+  const doc = target === 0 ? { version: 0, changes: {}, lessons: [] } : SIM.tuning.history.find((h) => h.version === target);
+  SIM.tuning.active = { ...doc, rolled_back_from: cur };
+  simEvent("tuning", `Rolled back to v${target} (simulated)`);
+  return target;
+}
+
+let demoReason = "";
+function startDemo(reason) {
+  MODE = "demo";
+  demoReason = reason || "";
+  simInit();
+  $("#demo-banner").classList.remove("hide");
+  if (reason) $("#demo-reason").textContent = reason + " Prices, trades and P&L here are made up by the page, not your account.";
+  if (token) $("#btn-live").classList.remove("hide");
+  D = simState();
+  renderAll();
+}
+$("#btn-live").addEventListener("click", () => { MODE = "live"; liveOK = false; seenEvents.clear(); $("#demo-banner").classList.add("hide"); pollLive(); });
+
+/* =====================================================================
+   Rendering (DOM panels)
+   ===================================================================== */
+function latestByTicker() {
+  const m = {};
+  for (const r of D.scans || []) m[r.ticker] = r;
+  return m;
+}
+function nowETMin() {
+  if (MODE === "demo") return SIM.etMin;
+  return etParts(Date.now()).min;
+}
+function setFeed(kind, text) { const c = $("#chip-feed"); c.className = "chip " + kind; c.innerHTML = "<i></i>" + esc(text); }
+
+const PHASE = { closed: ["market closed", ""], warmup: ["warm-up · no entries yet", "info"], entry_window: ["entry window open", "good"], managing_only: ["managing exits only", "warn"], flattened: ["flat for the day", "bad"] };
+
+function renderHeader() {
+  const st = D.status || {};
+  const mode = MODE === "demo" ? "demo · simulated" : (D.config?.mode || "—").replace("_", " ");
+  const mc = $("#chip-mode");
+  mc.className = "chip " + (MODE === "demo" ? "warn" : D.config?.mode === "live" ? "bad" : "info");
+  mc.innerHTML = "<i></i>" + esc(mode);
+  if (MODE === "demo") setFeed("warn", "simulated feed");
+  else if (!st.updated_at) setFeed("warn", "bot not running");
+  else if (D.stale) setFeed("warn", "bot quiet " + Math.round((st.age_seconds || 0) / 60) + "m");
+  else setFeed("good", "live feed");
+  const ph = PHASE[st.phase] || [st.phase || "unknown", ""];
+  const pc = $("#chip-phase"); pc.className = "chip " + ph[1]; pc.textContent = ph[0];
+}
+
+function renderTimeline() {
+  const el = $("#timeline"), c = D.config || {}, s = c.session || {}, ex = c.exits || {};
+  const O = 570, C = 960, X = (m) => ((m - O) / (C - O)) * 100;
+  const ne = parseHM(s.no_entries_before_et || "09:45"), na = parseHM(s.no_entries_after_et || "15:30"), fl = parseHM(ex.flatten_time_et || "15:50");
+  let h = `<div class="seg warm" style="left:0;width:${X(ne)}%"></div><div class="seg entry" style="left:${X(ne)}%;width:${X(na) - X(ne)}%"></div>`;
+  h += `<div class="seg manage" style="left:${X(na)}%;width:${X(fl) - X(na)}%"></div><div class="seg flat" style="left:${X(fl)}%;right:0"></div>`;
+  h += `<div class="tick n" style="left:0"><span>09:30</span></div><div class="tick" style="left:${X(ne)}%"><span>${hhmm(ne)} entries open</span></div>`;
+  h += `<div class="tick r n" style="left:${X(na)}%"><span>${hhmm(na)}</span></div><div class="tick r" style="left:${X(fl)}%"><span>${hhmm(fl)} flat</span></div>`;
+  for (const r of D.scans || []) {
+    const p = etParts(Date.parse(r.ts)); if (p.min < O || p.min > C) continue;
+    h += `<div class="scan${r.decision?.approved ? " hit" : ""}" style="left:${X(p.min)}%"></div>`;
+  }
+  const n = clamp(nowETMin(), O, C);
+  h += `<div class="now${X(n) > 80 ? " flip" : ""}" id="tl-now" style="left:${X(n)}%" data-l="${hhmm(nowETMin())} ET"></div>`;
+  el.innerHTML = h;
+}
+
+const sparkData = { equity: [], pnl: [] };
+function renderKPIs() {
+  const st = D.status || {}, a = st.account || {}, L = st.limits || {}, sim = MODE === "demo" ? "<em>SIM</em>" : "";
+  if (a.equity != null) { sparkData.equity.push(a.equity); if (sparkData.equity.length > 120) sparkData.equity.shift(); }
+  const next = nextScanText();
+  $("#kpis").innerHTML = `
+    <div class="kpi"><div class="l">Equity ${sim}</div><div class="v">${money(a.equity, 0)}</div><div class="s">buying power ${money(a.buying_power, 0)}</div><canvas id="spark-eq"></canvas></div>
+    <div class="kpi"><div class="l">Day P&amp;L ${sim}</div><div class="v ${cls(a.day_pnl)}">${smoney(a.day_pnl)}<small>${signed(a.day_pnl_pct, 2, "%")}</small></div><div class="s">vs start-of-day ${money(a.start_of_day_equity, 0)}</div></div>
+    <div class="kpi"><div class="l">Open positions</div><div class="v">${L.open_positions ?? "—"}<small>/ ${L.max_open_positions ?? "—"}</small></div><div class="s">exposure ${money(L.exposure, 0)}</div></div>
+    <div class="kpi"><div class="l">Trades today</div><div class="v">${L.trades_today ?? "—"}<small>/ ${L.max_trades_per_day ?? "—"}</small></div><div class="s">${(D.scans || []).length} plans checked</div></div>
+    <div class="kpi"><div class="l">Next scan</div><div class="v" id="kpi-next">${next}</div><div class="s">every ${Math.round((st.scan_interval_seconds || D.config?.session?.scan_interval_seconds || 300) / 60)} min · ${esc(D.config?.model || "")}</div></div>`;
+  drawSpark($("#spark-eq"), sparkData.equity);
+}
+function nextScanText() {
+  const st = D.status || {};
+  if (st.activity?.kind === "planning") return "planning " + esc(st.activity.ticker);
+  if (st.phase && st.phase !== "entry_window") return "—";
+  let left;
+  if (MODE === "demo") left = (SIM.nextScanMin - SIM.etMin) * 60;
+  else if (st.last_scan_at) left = (st.scan_interval_seconds || 300) - (Date.now() - Date.parse(st.last_scan_at)) / 1000;
+  if (left == null) return "—";
+  if (left <= 0) return "due";
+  return Math.floor(left / 60) + ":" + String(Math.floor(left % 60)).padStart(2, "0");
+}
+function drawSpark(cv, data) {
+  if (!cv || data.length < 2) return;
+  const dpr = devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const g = cv.getContext("2d"); g.scale(dpr, dpr);
+  const lo = Math.min(...data), hi = Math.max(...data), sp = hi - lo || 1;
+  g.beginPath();
+  data.forEach((v, i) => { const x = (i / (data.length - 1)) * w, y = h - 3 - ((v - lo) / sp) * (h - 6); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+  g.strokeStyle = "#2ff3d2"; g.lineWidth = 1.2; g.stroke();
+  g.lineTo(w, h); g.lineTo(0, h); g.closePath();
+  const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, "rgba(47,243,210,.25)"); gr.addColorStop(1, "rgba(47,243,210,0)");
+  g.fillStyle = gr; g.fill();
+}
+
+function actionTag(rec, held) {
+  if (held) return `<span class="a" style="color:var(--gold)">IN TRADE</span>`;
+  if (!rec) return `<span class="a muted">WAITING</span>`;
+  if (rec.decision?.approved) return `<span class="a up">${esc(rec.decision.action)}</span>`;
+  if (rec.plan?.action && rec.plan.action !== "NO_TRADE") return `<span class="a" style="color:var(--warn)">BLOCKED</span>`;
+  return `<span class="a muted">NO TRADE</span>`;
+}
+function renderWatch() {
+  const L = latestByTicker(), st = D.status || {}, held = new Set((st.positions || []).map((p) => p.symbol));
+  const wl = D.watchlist?.length ? D.watchlist : Object.keys(L);
+  if (!selected || !wl.includes(selected)) selected = wl[0] || null;
+  const planning = st.activity?.kind === "planning" ? st.activity.ticker : null;
+  $("#watch-meta").textContent = wl.length + " tickers";
+  $("#watch").innerHTML = wl.map((t) => {
+    const r = L[t], s = r?.snapshot || {}, ch = r?.code_checklist || [];
+    const pos = (st.positions || []).find((p) => p.symbol === t);
+    const px = pos ? pos.current_price : s.last_price;
+    const chg = px != null && s.prior_close ? (px / s.prior_close - 1) * 100 : null;
+    const pips = ITEMS.map((it) => { const c = ch.find((x) => x.item === it); return `<i class="${c ? (c.result === "PASS" ? "p" : "f") : ""}"></i>`; }).join("");
+    return `<button type="button" class="wrow${t === selected ? " sel" : ""}${t === planning ? " planning" : ""}" data-t="${esc(t)}">
+      <span class="t">${esc(t)}</span><span class="p">${num(px)} <span class="${cls(chg)}">${signed(chg, 2, "%")}</span></span>${actionTag(r, held.has(t))}
+      <span class="pips" aria-label="checks passed">${pips}</span></button>`;
+  }).join("") || `<div class="empty">No watchlist yet. Set trading.watchlist in config.yaml.</div>`;
+}
+$("#watch").addEventListener("click", (e) => { const b = e.target.closest("[data-t]"); if (b) select(b.dataset.t); });
+function select(t) { selected = t; store.set("tb.sel", t); renderWatch(); renderMatrix(); renderPlan(); }
+
+function renderGauges() {
+  const st = D.status || {}, a = st.account || {}, L = st.limits || {};
+  const lossUsed = a.day_pnl_pct != null ? Math.max(0, -a.day_pnl_pct) : null;
+  const riskPct = a.equity ? (L.open_risk || 0) / a.equity * 100 : null;
+  const riskCap = (L.risk_per_trade_pct || .5) * (L.max_open_positions || 3);
+  const g = [
+    ["Daily loss", lossUsed, L.daily_loss_limit_pct || 2, (v) => num(v, 2) + "%", "limit " + (L.daily_loss_limit_pct ?? "—") + "%"],
+    ["Trades", L.trades_today, L.max_trades_per_day || 5, (v) => v, "max " + (L.max_trades_per_day ?? "—")],
+    ["Positions", L.open_positions, L.max_open_positions || 3, (v) => v, "max " + (L.max_open_positions ?? "—")],
+    ["Open risk", riskPct, riskCap, (v) => num(v, 2) + "%", "of equity to stops"],
+  ];
+  $("#gauges").innerHTML = g.map(([l, v, max, f, s]) => {
+    const frac = v == null ? 0 : clamp(v / max, 0, 1);
+    const col = frac >= 1 ? "#ff4f6d" : frac >= .66 ? "#ffb648" : "#2ff3d2";
+    const ticks = Array.from({ length: 11 }, (_, i) => { const an = Math.PI * (1 - i / 10); return `<line x1="${50 + 36 * Math.cos(an)}" y1="${50 - 36 * Math.sin(an)}" x2="${50 + 40 * Math.cos(an)}" y2="${50 - 40 * Math.sin(an)}" stroke="#2a4a50" stroke-width="1"/>`; }).join("");
+    const an = Math.PI * (1 - frac);
+    return `<div class="gauge"><svg viewBox="0 0 100 58" role="img" aria-label="${esc(l)}">
+      ${ticks}
+      <path d="M14 50 A36 36 0 0 1 86 50" fill="none" stroke="#0f252b" stroke-width="6"/>
+      <path d="M14 50 A36 36 0 0 1 86 50" fill="none" stroke="${col}" stroke-width="6" pathLength="100" stroke-dasharray="${frac * 100} 100" style="filter:drop-shadow(0 0 3px ${col});transition:stroke-dasharray .6s"/>
+      <line x1="50" y1="50" x2="${50 + 30 * Math.cos(an)}" y2="${50 - 30 * Math.sin(an)}" stroke="#cdeeee" stroke-width="1.5"/>
+      <circle cx="50" cy="50" r="3" fill="#cdeeee"/></svg>
+      <div class="gl">${esc(l)}</div><div class="gv" style="color:${col}">${v == null ? "—" : f(v)}</div><div class="gs">${esc(s)}</div></div>`;
+  }).join("");
+  const c = D.config || {}, r = c.risk || {}, se = c.setup || {};
+  $("#limits").innerHTML = [
+    ["Risk per trade", (r.risk_per_trade_pct ?? "—") + "% of equity"], ["Max position", (r.max_position_pct ?? "—") + "% of equity"],
+    ["Min confidence", r.min_confidence ?? "—"], ["Min reward:risk", (se.min_reward_risk ?? "—") + ":1"],
+    ["Flat by", (c.exits?.flatten_time_et || "15:50") + " ET"],
+  ].map(([k, v]) => `<div><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join("");
+}
+
+function renderMatrix() {
+  const L = latestByTicker(), wl = D.watchlist?.length ? D.watchlist : Object.keys(L);
+  let h = `<thead><tr><th>Ticker</th>${ITEMS.map((i) => `<th>${ITEM_LABEL[i]}</th>`).join("")}<th>Gate</th></tr></thead><tbody>`;
+  for (const t of wl) {
+    const r = L[t];
+    h += `<tr class="${t === selected ? "sel" : ""}"><td class="tk" data-t="${esc(t)}">${esc(t)}</td>`;
+    if (!r) { h += `<td colspan="7" class="muted">not scanned yet</td></tr>`; continue; }
+    const ch = r.code_checklist || [], cl = r.plan?.checklist || [];
+    ITEMS.forEach((it, i) => {
+      const c = ch.find((x) => x.item === it);
+      if (!c) { h += `<td class="muted">—</td>`; return; }
+      const cc = cl[i], dis = cc && cc.result && cc.result !== c.result;
+      h += `<td class="${c.result === "PASS" ? "P" : "F"}${dis ? " dis" : ""}" title="${esc(c.value)}${dis ? " · Claude said " + esc(cc.result) : ""}"><span class="ic">${c.result === "PASS" ? "✓" : "✗"}</span>${esc(shortVal(it, c.value))}</td>`;
+    });
+    const d = r.decision || {};
+    h += `<td class="vd ${d.approved ? "up" : "dn"}">${d.approved ? esc(d.action) : "NO TRADE"}</td></tr>`;
+  }
+  $("#matrix").innerHTML = h + "</tbody>";
+}
+$("#matrix").addEventListener("click", (e) => { const td = e.target.closest("[data-t]"); if (td) select(td.dataset.t); });
+
+function jsonHL(obj) {
+  const s = JSON.stringify(obj, null, 2) ?? "null";
+  return esc(s).replace(/(&quot;(?:[^&]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)/g, (m, str, colon, b, n) => {
+    if (str) {
+      if (colon) return `<span class="k">${str}</span>${colon}`;
+      if (str === "&quot;PASS&quot;") return `<span class="pass">${str}</span>`;
+      if (str === "&quot;FAIL&quot;") return `<span class="fail">${str}</span>`;
+      return `<span class="s">${str}</span>`;
+    }
+    if (b) return `<span class="b">${b}</span>`;
+    return `<span class="n">${n}</span>`;
+  });
+}
+function renderPlan() {
+  const r = latestByTicker()[selected];
+  const el = $("#plan");
+  if (!r) { el.innerHTML = `<div class="empty">No plan for ${esc(selected || "this ticker")} yet. Plans appear after the first scan.</div>`; $("#plan-meta").textContent = ""; return; }
+  const p = etParts(Date.parse(r.ts));
+  $("#plan-meta").textContent = r.ticker + " · " + hhmm(p.min) + " ET";
+  const d = r.decision || {}, s = r.snapshot || {};
+  const verdict = d.approved
+    ? `<div class="verdict ok">GATE APPROVED · ${esc(d.action)} ${esc(d.qty)} sh<small>entry ${num(d.entry)} · stop ${num(d.stop)} · target ${num(d.target)} · R:R ${num(d.rr_ratio)}:1</small></div>`
+    : `<div class="verdict no">NO TRADE<small>${r.plan?.action && r.plan.action !== "NO_TRADE" ? "Claude proposed " + esc(r.plan.action) + "; code blocked it" : "Claude's answer was NO_TRADE"}</small></div>`;
+  const reasons = d.approved ? "" : `<ul class="reasons">${(d.reasons || []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
+  const kv = [
+    ["Price", num(s.last_price)], ["VWAP", num(s.vwap)], ["ATR(14)", num(s.atr)], ["Rel vol", s.relative_volume != null ? num(s.relative_volume) + "x" : "—"],
+    ["Spread", s.spread_pct != null ? num(s.spread_pct, 3) + "%" : "—"], ["Avg vol", s.avg_daily_volume != null ? (s.avg_daily_volume / 1e6).toFixed(1) + "M" : "—"],
+    ["Support", (s.supports || []).slice(0, 2).map((v) => num(v)).join(" · ") || "—"], ["Resist", (s.resistances || []).slice(0, 2).map((v) => num(v)).join(" · ") || "—"],
+  ].map(([k, v]) => `<div><span>${k}</span><span>${v}</span></div>`).join("");
+  const news = (s.news || []).length ? `<div class="news"><div class="h">Headlines (untrusted data, shown as text)</div>${s.news.map((n) => `<div class="n">${esc(n.headline)} <span class="muted">· ${esc(n.age_hours)}h</span></div>`).join("")}</div>` : `<div class="news"><div class="h">Headlines</div><div class="n muted">none in the last 48h</div></div>`;
+  const miss = (s.missing || []).length ? `<div class="note dn">Missing data: ${esc(s.missing.join(", "))}</div>` : "";
+  el.innerHTML = `<div class="plan-grid"><div style="min-width:0">${verdict}${reasons}<div class="kv">${kv}</div>${news}${miss}</div>
+    <div style="min-width:0"><pre class="json" aria-label="Claude's JSON plan">${jsonHL(r.plan)}</pre></div></div>`;
+}
+
+function renderPositions() {
+  const st = D.status || {}, ps = st.positions || [], pend = st.pending_entries || [];
+  const ex = D.config?.exits || {};
+  let h = ps.map((p) => {
+    const long = p.direction === "long", R = p.initial_stop != null ? Math.abs(p.entry - p.initial_stop) : null;
+    const oneR = R != null ? p.entry + (long ? 1 : -1) * (ex.trail_after_r || 1) * R : null;
+    const vals = [p.initial_stop, p.stop, p.entry, p.target, p.current_price, oneR].filter((v) => v != null);
+    let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * .08 || 1; lo -= pad; hi += pad;
+    const X = (v) => (long ? (v - lo) / (hi - lo) : (hi - v) / (hi - lo)) * 100;
+    const zone = (a, b, c) => (a == null || b == null) ? "" : `<div class="zone ${c}" style="left:${Math.min(X(a), X(b))}%;width:${Math.abs(X(b) - X(a))}%"></div>`;
+    const locked = p.stop != null && (long ? p.stop > p.entry : p.stop < p.entry);
+    const mk = (v, c, label, pos) => v == null ? "" : `<div class="mk ${c} ${pos}" style="left:${X(v)}%"><span>${label}<br>${num(v)}</span></div>`;
+    return `<div class="pos">
+      <div class="pos-h"><span class="t">${esc(p.symbol)}</span><span class="d ${long ? "up" : "dn"}">${long ? "LONG" : "SHORT"} ${Math.abs(p.qty)}</span>
+        <span class="pnl ${cls(p.unrealized_pnl)}">${smoney(p.unrealized_pnl)}${MODE === "demo" ? " <span class='muted'>sim</span>" : ""}</span>
+        ${p.trailing ? `<span class="chip warn" style="color:var(--gold);border-color:rgba(255,211,107,.5)">trailing</span>` : ""}
+        <span class="r ${cls(p.r_multiple)}">${signed(p.r_multiple, 2, "R")}</span></div>
+      <div class="ladder">
+        <div class="rail"></div>
+        ${zone(p.stop, p.entry, locked ? "" : "risk")}${zone(p.entry, p.target, "rew")}${locked ? zone(p.entry, p.stop, "lock") : ""}
+        ${p.trailing ? mk(p.initial_stop, "ghost", "first stop", "dn") : ""}
+        ${mk(p.stop, "stop", p.trailing ? "trail stop" : "stop", "up")}
+        ${mk(p.entry, "entry", "entry", "dn")}
+        ${!p.trailing ? mk(oneR, "oneR", "+1R trail", "up") : ""}
+        ${mk(p.target, "tgt", "target", "dn")}
+        <div class="px" style="left:${X(p.current_price)}%" title="current price ${num(p.current_price)}"></div>
+      </div>
+      <div class="foot"><span>price <b>${num(p.current_price)}</b></span><span>avg <b>${num(p.avg_entry)}</b></span><span>1R = <b>${R != null ? "$" + num(R) : "—"}</b>/sh</span>
+        <span class="${p.trailing ? "trail-on" : ""}">${p.trailing ? (locked ? "profit locked by trailing stop" : "stop trailing") : "trail starts at +" + (ex.trail_after_r || 1) + "R"}</span>${p.managed ? "" : "<span class='dn'>not opened by the bot · not managed</span>"}</div>
+    </div>`;
+  }).join("");
+  h += pend.map((p) => `<div class="pos"><div class="pos-h"><span class="t">${esc(p.symbol)}</span><span class="d" style="color:var(--cyan)">ENTRY ORDER WAITING</span></div>
+    <div class="foot"><span>trigger <b>${num(p.entry)}</b></span><span>stop <b>${num(p.initial_stop)}</b></span><span>target <b>${num(p.target)}</b></span></div></div>`).join("");
+  $("#positions").innerHTML = h || `<div class="empty">Flat. No open positions${st.phase === "entry_window" ? "; the bot is waiting for a setup that passes all 6 checks." : "."}</div>`;
+}
+
+function renderEvents() {
+  const evs = (D.events || []).slice(-120).reverse();
+  $("#ev-meta").textContent = evs.length + " recent";
+  $("#events").innerHTML = evs.map((e) => {
+    const key = e._id || e.ts + e.msg; const isNew = seenEvents.size && !seenEvents.has(key);
+    const p = etParts(Date.parse(e.ts));
+    return `<div class="ev ${esc(e.kind)}${e.level === "error" ? " error" : ""}${isNew ? " new" : ""}"><span class="ts">${hhmmss(p.min)}</span><span class="kd">${esc(e.kind)}</span><span class="m">${esc(e.msg)}</span></div>`;
+  }).join("") || `<div class="empty">No events yet. The bot writes them while <code>python -m tradebot run</code> is going.</div>`;
+  for (const e of evs) seenEvents.add(e._id || e.ts + e.msg);
+}
+
+function renderHeat() {
+  const os = D.outcomes || [];
+  const trig = os.filter((o) => o.triggered);
+  const wins = trig.filter((o) => o.r_multiple > 0).length;
+  const avg = trig.length ? trig.reduce((s, o) => s + o.r_multiple, 0) / trig.length : null;
+  const days = [...new Set(os.map((o) => o.ts.slice(0, 10)))].sort().slice(-20);
+  const tks = [...new Set([...(D.watchlist || []), ...os.map((o) => o.ticker)])];
+  const col = (r) => {
+    if (r == null) return "rgba(255,255,255,.025)";
+    const t = clamp(r / 2, -1, 1);
+    return t >= 0 ? `rgba(61,255,155,${.12 + .78 * t})` : `rgba(255,79,109,${.12 + .78 * -t})`;
+  };
+  $("#heat-meta").textContent = MODE === "demo" ? "last 30 days · simulated" : "last 30 days";
+  let h = `<div class="stats">
+    <div class="stat"><div class="l">Scored</div><div class="v">${os.length}</div></div>
+    <div class="stat"><div class="l">Triggered</div><div class="v">${trig.length}</div></div>
+    <div class="stat"><div class="l">Win rate</div><div class="v">${trig.length ? Math.round(wins / trig.length * 100) + "%" : "—"}</div></div>
+    <div class="stat"><div class="l">Avg R</div><div class="v ${cls(avg)}">${avg == null ? "—" : signed(avg, 2)}</div></div></div>`;
+  if (!os.length) h += `<div class="empty">No scored plans yet. The bot replays each priced plan after the close.</div>`;
+  else {
+    h += `<div class="heat">` + tks.map((t) => {
+      const cells = days.map((d) => { const xs = trig.filter((o) => o.ticker === t && o.ts.startsWith(d)); const r = xs.length ? xs.reduce((s, o) => s + o.r_multiple, 0) : null; return `<div class="c" style="background:${col(r)}" title="${esc(t)} ${d}: ${r == null ? "no triggered plans" : signed(r, 2, "R") + " over " + xs.length}"></div>`; }).join("");
+      return `<div class="row"><span>${esc(t)}</span><div class="cells" style="grid-template-columns:repeat(${days.length},minmax(0,1fr))">${cells}</div></div>`;
+    }).join("") + `</div><div class="scale"><span>-2R</span><span class="bar"></span><span>+2R</span></div>`;
+  }
+  h += `<p class="note">What each priced plan would have done on later minute bars, whether or not it was traded. Hypothetical, not account P&amp;L.</p>`;
+  $("#heat").innerHTML = h;
+}
+
+const PNAME = { "setup.catalyst_max_age_hours": "Catalyst max age (h)", "setup.min_relative_volume": "Min relative volume", "setup.min_avg_daily_volume": "Min avg volume", "setup.max_spread_pct": "Max spread %", "setup.min_reward_risk": "Min reward:risk", "setup.max_level_distance_atr": "Level distance (ATR)", "exits.trail_after_r": "Trail after (R)", "exits.trail_distance_r": "Trail distance (R)", "risk.min_confidence": "Min confidence" };
+const armed = {};
+function renderImprove() {
+  const act = D.tuning?.active || { version: 0, changes: {}, lessons: [] }, hist = D.tuning?.history || [], props = (D.proposals || []).slice().reverse();
+  $("#props").innerHTML = props.map((p) => {
+    const pending = ["passed", "lessons_only"].includes(p.status);
+    const ch = Object.entries(p.changes || {}).map(([k, v]) => `<div><b>${esc(PNAME[k] || k)}</b>${pending ? `<span class="muted">${esc(D.tunable?.[k]?.current ?? "now")}</span>` : ""}<span class="arrow">→</span><b>${esc(v)}</b>${p.rationales?.[k] ? `<em>${esc(p.rationales[k])}</em>` : ""}</div>`).join("");
+    const b = p.baseline, c = p.candidate;
+    let cmp = "";
+    if (b && c) {
+      const row = (lab, bv, cv, f, better) => { const mx = Math.max(Math.abs(bv), Math.abs(cv)) || 1; return `<span class="muted">${lab}</span><div style="display:grid;gap:2px"><div class="bar base"><i style="width:${Math.abs(bv) / mx * 100}%"></i></div><div class="bar cand"><i style="width:${Math.abs(cv) / mx * 100}%"></i></div></div><span>${f(bv)}<br><b class="${better ? "up" : "dn"}">${f(cv)}</b></span>`; };
+      cmp = `<div class="cmp">${row("Expectancy", b.expectancy_r, c.expectancy_r, (v) => signed(v, 3, "R"), c.expectancy_r >= b.expectancy_r)}${row("Trades", b.trades, c.trades, (v) => v, true)}${row("Max drawdown", b.max_drawdown_r, c.max_drawdown_r, (v) => num(v, 1) + "R", c.max_drawdown_r <= b.max_drawdown_r)}${row("Total", b.total_r, c.total_r, (v) => signed(v, 1, "R"), c.total_r >= b.total_r)}</div>
+        <div class="legend" style="margin:-4px 0 8px"><span><i style="background:var(--dim)"></i>current settings</span><span><i style="background:var(--teal)"></i>proposed</span></div>`;
+    }
+    const can = ["passed", "lessons_only"].includes(p.status), stale = can && p.based_on_version !== act.version;
+    const btn = can ? `<button class="btn go${armed[p.id] ? " armed" : ""}" type="button" data-approve="${esc(p.id)}" ${stale ? "disabled title='settings changed since this was made'" : ""}>${armed[p.id] ? "Tap again to adopt" : "Approve"}</button>` : "";
+    return `<div class="prop"><div class="prop-h"><span class="st ${esc(p.status)}">${esc(p.status.replace("_", " "))}</span><code>${esc(p.id)}</code>${p.adopted_version ? `<span class="muted">→ v${esc(p.adopted_version)}</span>` : ""}<span style="margin-left:auto">${btn}</span></div>
+      <p>${esc(p.summary || "")}</p>${ch ? `<div class="chg">${ch}</div>` : ""}${cmp}${p.verdict ? `<div class="verd">Replay verdict: ${esc(p.verdict)}</div>` : ""}${stale ? `<div class="verd dn">Settings changed since this proposal was drafted; the next review will redo it.</div>` : ""}</div>`;
+  }).join("") || `<div class="empty">No proposals yet. After each close the bot scores the day's plans and drafts one.</div>`;
+
+  const vs = [{ version: 0, note: "config.yaml only", changes: {} }, ...hist];
+  $("#versions").innerHTML = vs.slice().reverse().map((v) => {
+    const cur = v.version === act.version, key = "rb" + v.version;
+    const btn = v.version < act.version ? `<button class="btn danger${armed[key] ? " armed" : ""}" type="button" data-rollback="${v.version}">${armed[key] ? "Tap again" : "Roll back here"}</button>` : "";
+    const ch = Object.entries(v.changes || {}).map(([k, x]) => `${esc(PNAME[k] || k)} ${esc(x)}`).join(" · ") || "no overrides";
+    return `<div class="ver${cur ? " cur" : ""}"><div class="row1"><b>v${v.version}</b>${cur ? `<span class="st adopted">active</span>` : ""}<span class="muted">${v.adopted_at ? esc(v.adopted_at.slice(0, 10)) : ""}</span><span style="margin-left:auto">${btn}</span></div><div class="muted">${ch}</div></div>`;
+  }).join("");
+  const ls = act.lessons || [];
+  $("#lessons").innerHTML = ls.map((l) => `<li>${esc(l)}</li>`).join("") || `<li class="muted">none yet</li>`;
+}
+function impMsg(t, ok) { const m = $("#imp-msg"); m.textContent = t; m.className = "msg " + (ok ? "up" : "dn"); }
+$("#props").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-approve]"); if (!b || b.disabled) return;
+  const id = b.dataset.approve;
+  if (!armed[id]) { armed[id] = true; renderImprove(); setTimeout(() => { delete armed[id]; renderImprove(); }, 4000); return; }
+  delete armed[id];
+  try {
+    const v = MODE === "demo" ? simApprove(id) : (await postLive("api/approve", { id })).version;
+    impMsg(`Adopted as v${v}.` + (MODE === "demo" ? " (simulated)" : " The bot uses it the next time it starts."), true);
+  } catch (err) { impMsg("Not adopted: " + err.message, false); }
+  refreshNow();
+});
+$("#versions").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-rollback]"); if (!b) return;
+  const to = +b.dataset.rollback, key = "rb" + to;
+  if (!armed[key]) { armed[key] = true; renderImprove(); setTimeout(() => { delete armed[key]; renderImprove(); }, 4000); return; }
+  delete armed[key];
+  try {
+    const v = MODE === "demo" ? simRollback(to) : (await postLive("api/rollback", { to })).version;
+    impMsg(`Now on v${v}.` + (MODE === "demo" ? " (simulated)" : " The bot uses it the next time it starts."), true);
+  } catch (err) { impMsg("Rollback failed: " + err.message, false); }
+  refreshNow();
+});
+async function refreshNow() { if (MODE === "demo") { D = simState(); renderAll(); } else { try { D = await fetchLive(); renderAll(); } catch {} } }
+
+function renderTape() {
+  const L = latestByTicker(), st = D.status || {};
+  const items = (D.watchlist || []).map((t) => {
+    const s = L[t]?.snapshot || {}, pos = (st.positions || []).find((p) => p.symbol === t);
+    const px = pos ? pos.current_price : s.last_price, chg = px != null && s.prior_close ? (px / s.prior_close - 1) * 100 : null;
+    return `<span><b>${esc(t)}</b>${num(px)} <span class="${cls(chg)}">${signed(chg, 2, "%")}</span></span>`;
+  });
+  const last = (D.events || []).filter((e) => ["order", "exit", "trail", "decision"].includes(e.kind)).slice(-4).map((e) => `<span class="muted">${esc(e.msg)}</span>`);
+  const html = (MODE === "demo" ? `<span style="color:var(--warn)"><b>DEMO</b>simulated prices</span>` : `<span class="muted"><b>PRICES</b>as of last scan</span>`) + items.join("") + last.join("");
+  const tr = $("#tape"); if (tr.dataset.h !== html) { tr.innerHTML = html; tr.dataset.h = html; }
+}
+
+function renderAll() {
+  if (!D) return;
+  renderHeader(); renderTimeline(); renderKPIs(); renderWatch(); renderGauges(); renderMatrix(); renderPlan(); renderPositions(); renderEvents(); renderHeat(); renderImprove(); renderTape();
+  const st = D.status || {};
+  $("#hud-model").textContent = D.config?.model || "—";
+  $("#hud-last").textContent = MODE === "demo" ? (SIM.lastScanMin ? hhmm(SIM.lastScanMin) + " ET" : "—") : st.last_scan_at ? hhmm(etParts(Date.parse(st.last_scan_at)).min) + " ET" : "—";
+  Sky.dirty = true;
+}
+
+/* =====================================================================
+   Decision vortex (canvas): particles spiral into the planner core.
+   ===================================================================== */
+const Vortex = (() => {
+  const wrap = $("#vortex-wrap"), cv = $("#vortex"), tc = $("#vortex-trails");
+  const g = cv.getContext("2d"), tg = tc.getContext("2d");
+  let W = 0, H = 0, dpr = 1, parts = [], rot = 0, nodes = [], bursts = [], lastApproved = new Set();
+  function resize() {
+    dpr = Math.min(devicePixelRatio || 1, 2); W = wrap.clientWidth; H = wrap.clientHeight;
+    for (const c of [cv, tc]) { c.width = W * dpr; c.height = H * dpr; }
+    g.setTransform(dpr, 0, 0, dpr, 0, 0); tg.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const n = W < 500 ? 380 : 750;
+    parts = Array.from({ length: n }, () => spawn(Math.random()));
+  }
+  function spawn(f) { return { a: Math.random() * Math.PI * 2, r: .12 + .9 * (f ?? 1), s: .6 + Math.random() * .8, h: Math.random() }; }
+  new ResizeObserver(resize).observe(wrap);
+  cv.addEventListener("click", (e) => {
+    const b = cv.getBoundingClientRect(), x = e.clientX - b.left, y = e.clientY - b.top;
+    for (const n of nodes) if (Math.hypot(n.x - x, n.y - y) < 26) { select(n.t); return; }
+  });
+  function frame(dt) {
+    if (!W || !D) return;
+    const cx = W / 2, cy = H / 2 - 8, R = Math.min(W, H) * .44;
+    const st = D.status || {}, planning = st.activity?.kind === "planning" ? st.activity.ticker : null;
+    rot += dt * .05;
+    // trails layer
+    tg.globalCompositeOperation = "source-over";
+    tg.fillStyle = "rgba(3,8,11,0.16)"; tg.fillRect(0, 0, W, H);
+    tg.globalCompositeOperation = "lighter";
+    const speed = planning ? 1.6 : 1;
+    for (const p of parts) {
+      const x0 = cx + Math.cos(p.a) * p.r * R, y0 = cy + Math.sin(p.a) * p.r * R * .92;
+      p.a += dt * p.s * speed * (.25 + .55 / (p.r + .08));
+      p.r -= dt * .028 * p.s * speed * (1.2 - p.r * .5);
+      if (p.r < .06) Object.assign(p, spawn(1));
+      const x1 = cx + Math.cos(p.a) * p.r * R, y1 = cy + Math.sin(p.a) * p.r * R * .92;
+      const al = clamp(1.1 - p.r, .08, .8);
+      tg.strokeStyle = p.h < .82 ? `rgba(47,243,210,${al * .8})` : p.h < .95 ? `rgba(60,200,255,${al * .85})` : `rgba(255,211,107,${al * .9})`;
+      tg.lineWidth = p.r < .3 ? 1.4 : 1;
+      tg.beginPath(); tg.moveTo(x0, y0); tg.lineTo(x1, y1); tg.stroke();
+    }
+    // overlay layer
+    g.clearRect(0, 0, W, H);
+    // core glow
+    const gl = g.createRadialGradient(cx, cy, 0, cx, cy, R * .3);
+    gl.addColorStop(0, planning ? "rgba(160,255,240,.85)" : "rgba(120,255,230,.55)"); gl.addColorStop(.35, "rgba(47,243,210,.18)"); gl.addColorStop(1, "rgba(47,243,210,0)");
+    g.fillStyle = gl; g.beginPath(); g.arc(cx, cy, R * .3, 0, Math.PI * 2); g.fill();
+    // rings
+    g.save(); g.translate(cx, cy);
+    g.strokeStyle = "rgba(47,243,210,.35)"; g.lineWidth = 1; g.setLineDash([2, 6]); g.beginPath(); g.arc(0, 0, R * 1.02, 0, Math.PI * 2); g.stroke();
+    g.setLineDash([]);
+    for (let i = 0; i < 72; i++) {
+      const a = rot * .6 + (i / 72) * Math.PI * 2, on = (i + Math.floor(rot * 6)) % 9 !== 0;
+      g.strokeStyle = on ? "rgba(47,243,210,.55)" : "rgba(255,211,107,.8)"; g.lineWidth = 3;
+      g.beginPath(); g.arc(0, 0, R * 1.08, a, a + .055); g.stroke();
+    }
+    g.strokeStyle = "rgba(60,200,255,.18)"; g.beginPath(); g.arc(0, 0, R * .82, 0, Math.PI * 2); g.stroke();
+    g.restore();
+    // ticker nodes
+    const L = latestByTicker(), wl = D.watchlist?.length ? D.watchlist : Object.keys(L);
+    const held = new Set((st.positions || []).map((p) => p.symbol));
+    nodes = wl.map((t, i) => { const a = -Math.PI / 2 + (i / wl.length) * Math.PI * 2 + rot * .25; return { t, a, x: cx + Math.cos(a) * R * .82, y: cy + Math.sin(a) * R * .82 * .92 }; });
+    for (const n of nodes) {
+      const r = L[n.t], ch = r?.code_checklist || [], pass = ch.filter((c) => c.result === "PASS").length;
+      const approved = r?.decision?.approved, inTrade = held.has(n.t), isPl = n.t === planning, isSel = n.t === selected;
+      if (approved && r && !lastApproved.has(r.id)) { lastApproved.add(r.id); bursts.push({ x: n.x, y: n.y, t: 0 }); }
+      if (isPl) { // beam into the core
+        const gr = g.createLinearGradient(n.x, n.y, cx, cy); gr.addColorStop(0, "rgba(60,200,255,.9)"); gr.addColorStop(1, "rgba(60,200,255,0)");
+        g.strokeStyle = gr; g.lineWidth = 2 + Math.sin(performance.now() / 120) * 1; g.beginPath(); g.moveTo(n.x, n.y); g.lineTo(cx, cy); g.stroke();
+      }
+      // six check segments
+      for (let k = 0; k < 6; k++) {
+        const c = ch.find((x) => x.item === ITEMS[k]);
+        g.strokeStyle = !c ? "rgba(42,74,80,.9)" : c.result === "PASS" ? "rgba(47,243,210,.95)" : "rgba(255,79,109,.75)";
+        g.lineWidth = 3; g.beginPath(); const a0 = -Math.PI / 2 + k * Math.PI / 3 + .07; g.arc(n.x, n.y, 17, a0, a0 + Math.PI / 3 - .14); g.stroke();
+      }
+      g.fillStyle = inTrade ? "rgba(255,211,107,.25)" : approved ? "rgba(61,255,155,.25)" : "rgba(6,17,23,.9)";
+      g.beginPath(); g.arc(n.x, n.y, 12, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = isPl ? "#3cc8ff" : isSel ? "#cdeeee" : "rgba(47,243,210,.4)"; g.lineWidth = isSel || isPl ? 1.6 : 1;
+      g.beginPath(); g.arc(n.x, n.y, 22, 0, Math.PI * 2); g.stroke();
+      g.font = "600 11px 'Chakra Petch', sans-serif"; g.textAlign = "center"; g.fillStyle = "#cdeeee";
+      g.fillText(n.t, n.x, n.y + 36);
+      g.font = "9px 'JetBrains Mono', monospace";
+      g.fillStyle = isPl ? "#3cc8ff" : inTrade ? "#ffd36b" : approved ? "#3dff9b" : "#5f8d91";
+      g.fillText(isPl ? "PLANNING" : inTrade ? "IN TRADE" : r ? pass + "/6" : "—", n.x, n.y + 47);
+      g.fillStyle = "#cdeeee"; g.font = "9px 'JetBrains Mono', monospace"; g.fillText(String(pass || ""), n.x, n.y + 3);
+    }
+    // bursts on approval
+    bursts = bursts.filter((b) => (b.t += dt) < 1.6);
+    for (const b of bursts) { g.strokeStyle = `rgba(61,255,155,${1 - b.t / 1.6})`; g.lineWidth = 2; g.beginPath(); g.arc(b.x, b.y, 20 + b.t * 70, 0, Math.PI * 2); g.stroke(); }
+    // core label
+    g.textAlign = "center"; g.fillStyle = "#e9ffff"; g.font = "700 13px 'Chakra Petch', sans-serif";
+    g.fillText("CLAUDE PLANNER", cx, cy - 4);
+    g.font = "10px 'JetBrains Mono', monospace"; g.fillStyle = planning ? "#3cc8ff" : "#5f8d91";
+    const act = planning ? "planning " + planning + "…" : st.phase === "entry_window" ? "waiting for next scan" : (PHASE[st.phase] || ["idle"])[0];
+    g.fillText(act, cx, cy + 12);
+  }
+  return { frame };
+})();
+
+/* =====================================================================
+   Scan skyline: isometric towers, one per scan, rows per ticker.
+   ===================================================================== */
+const Sky = (() => {
+  const cv = $("#sky"), g = cv.getContext("2d"); let W = 0, H = 0, dpr = 1, t0 = 0;
+  const S = { dirty: true };
+  new ResizeObserver(() => { dpr = Math.min(devicePixelRatio || 1, 2); W = cv.clientWidth; H = cv.clientHeight; cv.width = W * dpr; cv.height = H * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0); }).observe(cv);
+  S.frame = (dt) => {
+    if (!W || !D) return;
+    t0 += dt;
+    g.clearRect(0, 0, W, H);
+    const wl = D.watchlist?.length ? D.watchlist : [...new Set((D.scans || []).map((r) => r.ticker))];
+    const COLS = W < 500 ? 10 : 16;
+    const rows = wl.map((t) => (D.scans || []).filter((r) => r.ticker === t).slice(-COLS));
+    const yaw = .62 + Math.sin(t0 * .15) * .06;
+    const cell = Math.min((W - 70) / (COLS * Math.cos(yaw) + wl.length * Math.sin(yaw)), 44);
+    const ox = W * .5 + 24, oy = H * .70;
+    const proj = (x, z, y) => {
+      const ix = (x - COLS / 2), iz = (z - wl.length / 2);
+      const rx = ix * Math.cos(yaw) - iz * Math.sin(yaw), rz = ix * Math.sin(yaw) + iz * Math.cos(yaw);
+      return [ox + rx * cell, oy + rz * cell * (W < 500 ? .6 : .42) - y];
+    };
+    // floor grid
+    g.strokeStyle = "rgba(47,243,210,.10)"; g.lineWidth = 1;
+    for (let x = 0; x <= COLS; x++) { const a = proj(x, 0, 0), b = proj(x, wl.length, 0); g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); }
+    for (let z = 0; z <= wl.length; z++) { const a = proj(0, z, 0), b = proj(COLS, z, 0); g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); }
+    // towers, back to front
+    const boxes = [];
+    rows.forEach((rs, z) => rs.forEach((r, i) => {
+      const x = i;
+      const pass = (r.code_checklist || []).filter((c) => c.result === "PASS").length;
+      boxes.push({ x, z, h: (pass / 6) * H * .5 + 2, r, pass, depth: x * Math.sin(yaw) + z * Math.cos(yaw) });
+    }));
+    boxes.sort((a, b) => a.depth - b.depth);
+    for (const b of boxes) {
+      const ap = b.r.decision?.approved, miss = (b.r.snapshot?.missing || []).length;
+      const base = ap ? [61, 255, 155] : miss ? [255, 79, 109] : b.pass >= 5 ? [255, 182, 72] : [47, 243, 210];
+      const k = ap ? 1 : .35 + b.pass / 6 * .5;
+      const c = (m) => `rgba(${base[0]},${base[1]},${base[2]},${(k * m).toFixed(3)})`;
+      const s = .78, x0 = b.x + (1 - s) / 2, z0 = b.z + (1 - s) / 2, x1 = x0 + s, z1 = z0 + s;
+      const P = (x, z, y) => proj(x, z, y);
+      const face = (pts, fill, stroke) => { g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(...p) : g.moveTo(...p))); g.closePath(); g.fillStyle = fill; g.fill(); g.strokeStyle = stroke; g.lineWidth = .8; g.stroke(); };
+      face([P(x0, z1, 0), P(x1, z1, 0), P(x1, z1, b.h), P(x0, z1, b.h)], c(.35), c(.9));
+      face([P(x1, z0, 0), P(x1, z1, 0), P(x1, z1, b.h), P(x1, z0, b.h)], c(.22), c(.8));
+      face([P(x0, z0, b.h), P(x1, z0, b.h), P(x1, z1, b.h), P(x0, z1, b.h)], c(.75), c(1));
+      if (ap) { const tp = P(b.x + .5, b.z + .5, b.h + 6 + Math.sin(t0 * 3) * 3); g.fillStyle = "#3dff9b"; g.beginPath(); g.arc(tp[0], tp[1], 2.5, 0, Math.PI * 2); g.fill(); }
+    }
+    // row labels
+    g.font = "600 10px 'Chakra Petch', sans-serif"; g.fillStyle = "#5f8d91"; g.textAlign = "right";
+    wl.forEach((t, z) => { const p = proj(0, z + .5, 0); g.fillText(t, p[0] - 6, p[1] + 3); });
+    g.textAlign = "left"; g.fillStyle = "#5f8d91"; g.font = "9px 'JetBrains Mono', monospace";
+    const pe = proj(COLS, wl.length, 0); g.fillText("time →", Math.min(pe[0] + 4, W - 40), pe[1]);
+    if (!boxes.length) { g.textAlign = "center"; g.fillStyle = "#5f8d91"; g.font = "11px 'JetBrains Mono', monospace"; g.fillText("No scans today yet", W / 2, H / 2); }
+  };
+  return S;
+})();
+
+/* =====================================================================
+   Main loop
+   ===================================================================== */
+let last = performance.now(), domT = 0, clockT = 0;
+function loop(now) {
+  const dt = clamp((now - last) / 1000, 0, .1); last = now;
+  if (MODE === "demo" && SIM.t) {
+    simStep(dt);
+    domT += dt;
+    if (domT > .5) { domT = 0; D = simState(); renderAll(); }
+  }
+  clockT += dt;
+  if (clockT > .25 && D) {
+    clockT = 0;
+    $("#clock").innerHTML = hhmmss(nowETMin()) + "<small>ET" + (MODE === "demo" ? " sim" : "") + "</small>";
+    const k = $("#kpi-next"); if (k) k.innerHTML = nextScanText();
+    $("#hud-next").innerHTML = nextScanText();
+  }
+  if (!reduceMotion || Math.floor(now / 1000) !== Math.floor((now - dt * 1000) / 1000)) { Vortex.frame(reduceMotion ? 0 : dt); Sky.frame(reduceMotion ? 0 : dt); }
+  requestAnimationFrame(loop);
+}
+
+/* Boot */
+const forceDemo = document.documentElement.dataset.forceDemo === "1" || /[?&#]demo\b/.test(location.search + location.hash);
+if (forceDemo) startDemo("");
+else if (!token || location.protocol === "file:") startDemo(location.protocol === "file:" ? "Opened as a file, so there's no bot to read from." : "Not connected to the bot. Open the link that `python -m tradebot dashboard` prints to see live data.");
+else pollLive();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
