@@ -75,6 +75,23 @@ class TradingSettings(BaseModel):
     journal_path: str = "journal/trades.jsonl"
 
 
+class ImprovementSettings(BaseModel):
+    """Self-improvement. Proposals are tested on past plans before adoption."""
+
+    dir: str = "tuning"
+    review_after_close: bool = True  # score the day and draft a proposal after flattening
+    auto_apply: bool = False  # True: adopt proposals that pass replay without asking
+    lookback_days: int = 30
+    min_trades: int = 20  # replayed trades needed before any change can pass
+    min_expectancy_gain_r: float = 0.05  # candidate must beat baseline by this much R/trade
+    max_drawdown_worsen_r: float = 1.0
+    reviewer_model: str = "claude-opus-5-5"
+    reviewer_effort: Literal["low", "medium", "high", "xhigh", "max"] = "high"
+    # Adopted lessons from past trades, shown to the planner. Filled from
+    # tuning/active.yaml; it cannot override the checklist (code still checks).
+    lessons: list[str] = Field(default_factory=list)
+
+
 class Config(BaseModel):
     setup: SetupThresholds = Field(default_factory=SetupThresholds)
     exits: ExitRules = Field(default_factory=ExitRules)
@@ -82,6 +99,7 @@ class Config(BaseModel):
     risk: RiskLimits = Field(default_factory=RiskLimits)
     planner: PlannerSettings = Field(default_factory=PlannerSettings)
     trading: TradingSettings = Field(default_factory=TradingSettings)
+    improvement: ImprovementSettings = Field(default_factory=ImprovementSettings)
 
     @classmethod
     def load(cls, path: str | os.PathLike | None = None) -> "Config":

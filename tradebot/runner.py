@@ -27,9 +27,11 @@ class Runner:
         broker: Broker,
         journal: Journal,
         clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+        on_close: Callable[[], None] | None = None,
     ):
         self.cfg, self.data, self.planner, self.broker, self.journal = cfg, data, planner, broker, journal
         self.now = clock
+        self.on_close = on_close  # runs once after the day is flattened
 
     # ---- entries -------------------------------------------------------
     def scan_once(
@@ -125,7 +127,12 @@ class Runner:
                     time.sleep(300)
                     continue
                 if self.manage_once():
-                    log.info("flat for the day; stopping")
+                    log.info("flat for the day")
+                    if self.on_close:
+                        try:
+                            self.on_close()
+                        except Exception:
+                            log.exception("end-of-day review failed")
                     return
                 now = self.now()
                 if (

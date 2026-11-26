@@ -3,6 +3,13 @@
   python -m tradebot plan AAPL NVDA     # plan + risk-check, print JSON, no orders
   python -m tradebot run                 # trading loop for the configured watchlist
   python -m tradebot flatten             # cancel all orders, close all positions
+
+Self-improvement:
+  python -m tradebot score               # replay finished plans to score them
+  python -m tradebot review              # Claude drafts a change; code replay-tests it
+  python -m tradebot proposals           # list proposals and their test results
+  python -m tradebot approve <id>        # adopt a passed proposal
+  python -m tradebot rollback [--to N]   # go back to an earlier settings version
 """
 
 from __future__ import annotations
@@ -12,12 +19,16 @@ import json
 import logging
 import os
 import sys
+from datetime import datetime, timezone
 
 from .broker import AlpacaBroker, DryRunBroker
 from .config import Config, LiveTradingNotAllowed, assert_mode_allowed
 from .journal import Journal
 from .market_data import AlpacaMarketData
 from .planner import ClaudePlanner
+from .improve.outcomes import score_journal
+from .improve.reviewer import approve, run_review
+from .improve.tuning import TuningError, TuningStore
 from .runner import Runner
 
 
@@ -38,21 +49,60 @@ def main(argv: list[str] | None = None) -> None:
     p_run = sub.add_parser("run", help="run the trading loop")
     p_run.add_argument("tickers", nargs="*", help="defaults to trading.watchlist")
     sub.add_parser("flatten", help="cancel all orders and close all positions")
+    sub.add_parser("score", help="score finished plans by replaying them on later bars")
+    sub.add_parser("review", help="have Claude propose a settings change and replay-test it")
+    sub.add_parser("proposals", help="list proposals")
+    p_ap = sub.add_parser("approve", help="adopt a proposal that passed")
+    p_ap.add_argument("proposal_id")
+    p_rb = sub.add_parser("rollback", help="return to an earlier settings version")
+    p_rb.add_argument("--to", type=int, default=None, help="version number (0 = config.yaml only)")
     args = ap.parse_args(argv)
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-    cfg = Config.load(args.config)
+    base_cfg = Config.load(args.config)
+    store = TuningStore(base_cfg.improvement.dir)
+    try:
+        cfg = store.layer(base_cfg)  # adopted self-improvements on top of config.yaml
+    except TuningError as e:
+        sys.exit(f"tuning/active.yaml is invalid ({e}); fix it or run `rollback --to 0`")
     try:
         assert_mode_allowed(cfg)
     except LiveTradingNotAllowed as e:
         sys.exit(str(e))
 
+    journal = Journal(cfg.trading.journal_path)
+    if args.cmd == "proposals":
+        for p in store.list_proposals():
+            print(f"{p['id']}  {p['status']:<13} {p.get('changes', {})}  {p.get('verdict', '')}")
+        print(f"active settings version: v{store.active().get('version', 0)}")
+        return
+    if args.cmd == "approve":
+        try:
+            print(f"adopted as v{approve(store, args.proposal_id)}")
+        except TuningError as e:
+            sys.exit(str(e))
+        return
+    if args.cmd == "rollback":
+        try:
+            print(f"now on v{store.rollback(args.to)}")
+        except TuningError as e:
+            sys.exit(str(e))
+        return
+
     key, secret = _env("ALPACA_API_KEY"), _env("ALPACA_SECRET_KEY")
     data = AlpacaMarketData(key, secret, cfg)
-    journal = Journal(cfg.trading.journal_path)
+
+    if args.cmd == "score":
+        print(f"scored {score_journal(journal, data, cfg, datetime.now(timezone.utc))} plans")
+        return
+    if args.cmd == "review":
+        _env("ANTHROPIC_API_KEY")
+        score_journal(journal, data, cfg, datetime.now(timezone.utc))
+        print(json.dumps(run_review(cfg, journal, store), indent=2))
+        return
 
     if args.cmd == "plan" or cfg.trading.mode == "dry_run":
         broker = DryRunBroker(cfg)
@@ -64,7 +114,14 @@ def main(argv: list[str] | None = None) -> None:
         return
 
     _env("ANTHROPIC_API_KEY")
-    runner = Runner(cfg, data, ClaudePlanner(cfg), broker, journal)
+    def end_of_day() -> None:
+        n = score_journal(journal, data, cfg, datetime.now(timezone.utc))
+        logging.info("scored %d plans", n)
+        if cfg.improvement.review_after_close:
+            p = run_review(cfg, journal, store)
+            logging.info("review %s: %s (%s)", p["id"], p["status"], p.get("verdict", ""))
+
+    runner = Runner(cfg, data, ClaudePlanner(cfg), broker, journal, on_close=end_of_day)
 
     if args.cmd == "plan":
         for plan, decision in runner.scan_once(args.tickers, place_orders=False):

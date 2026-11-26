@@ -100,6 +100,38 @@ it would place.
 scan interval and a 4-ticker watchlist that's up to about 280 calls a day.
 Raise `scan_interval_seconds` or shorten the watchlist to spend less.
 
+## Self-improvement
+
+The bot learns from its own results, but it cannot quietly rewrite its rules.
+
+1. **Score.** After the close, every plan Claude priced (taken or not) is
+   replayed on the minute bars that followed: did it hit the stop, the target,
+   or get flattened, and for how many R? Results go to `journal/outcomes.jsonl`.
+2. **Review.** Claude gets a numbers-only table of those results (no news text)
+   and proposes up to a few setting changes plus short "lessons" for the planner.
+3. **Test.** Code checks each change against an allowlist with bounds, then
+   replays the last 30 days of plans with the new settings. A change passes only
+   if it beats the current settings by at least 0.05R per trade over at least 20
+   trades, without a worse drawdown.
+4. **Adopt.** By default you approve: `python -m tradebot approve <id>`.
+   Failed proposals can't be adopted. Set `improvement.auto_apply: true` to let
+   passed proposals adopt themselves.
+5. **Undo.** Every adopted version is saved in `tuning/history/`.
+   `python -m tradebot rollback` goes back one version; `rollback --to 0`
+   returns to exactly your `config.yaml`.
+
+What it can tune: catalyst age, relative volume, average volume, spread, minimum
+R:R, level distance, trailing settings and minimum confidence. Checklist bounds
+never go looser than your original rules (2:1 R:R, 1M volume, 0.1% spread, 2x
+relative volume, 24h catalyst). It can never touch the risk limits, trading
+mode, the live switch, the 3:50pm flatten, or the model. Lessons are shown to
+the planner but can't relax the checklist, because code still checks every
+rule itself.
+
+`run` scores the day and drafts a proposal automatically after flattening (one
+extra Claude call per day). You can also run `score`, `review` and `proposals`
+by hand.
+
 ## Live trading
 
 Live trading needs **both**:
@@ -128,3 +160,6 @@ keys and make no network calls.
 - The catalyst check in code only confirms fresh news exists; whether it matters
   is Claude's judgment.
 - SWING mode from the original prompt is not built; the code is DAY-only.
+- Replay only covers plans Claude priced (BUY/SHORT), so it can judge
+  tightening a rule far better than loosening one. Replays use bar data, not
+  real fills, and assume a stop hits first when one bar touches both.

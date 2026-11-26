@@ -128,6 +128,14 @@ class AlpacaMarketData:
         rows = barset.data.get(ticker, []) if hasattr(barset, "data") else []
         return rows
 
+    def minute_bars(self, ticker: str, start: datetime, end: datetime) -> list[ind.Bar]:
+        from alpaca.data.timeframe import TimeFrame
+
+        return [
+            ind.Bar(float(b.open), float(b.high), float(b.low), float(b.close), float(b.volume))
+            for b in self._bars(ticker, TimeFrame.Minute, start, end)
+        ]
+
     def snapshot(self, ticker: str, now: datetime | None = None) -> MarketSnapshot:
         from alpaca.data.enums import DataFeed
         from alpaca.data.requests import NewsRequest, StockLatestQuoteRequest

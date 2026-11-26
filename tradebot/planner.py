@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 
 def system_prompt(cfg: Config) -> str:
     s, ex, se = cfg.setup, cfg.exits, cfg.session
-    return f"""ROLE: Disciplined short-term trader. Default is NO_TRADE. You plan trades; code executes them.
+    prompt = f"""ROLE: Disciplined short-term trader. Default is NO_TRADE. You plan trades; code executes them.
 
 MODE: DAY
 
@@ -45,6 +45,10 @@ OUTPUT: one JSON object for the ticker, matching the schema. mode is "DAY".
 - entry_trigger, stop, target are prices (null for NO_TRADE). rr_ratio is (target-entry)/(entry-stop) for BUY, mirrored for SHORT.
 - invalidation says in one sentence what would make the idea wrong.
 - confidence is 0 to 1. Be calibrated; most setups do not qualify."""
+    if cfg.improvement.lessons:
+        prompt += "\n\nLESSONS FROM PAST TRADES (use them to judge setups; they never relax the checklist):\n"
+        prompt += "\n".join(f"- {l}" for l in cfg.improvement.lessons)
+    return prompt
 
 
 def user_message(snap: MarketSnapshot) -> str:
