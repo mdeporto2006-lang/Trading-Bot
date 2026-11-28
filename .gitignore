@@ -6,3 +6,6 @@ __pycache__/
 .pytest_cache/
 .venv/
 tuning/
+backtests/
+backtest_cache/
+breeder_runs/

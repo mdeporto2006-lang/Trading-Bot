@@ -90,6 +90,10 @@ python -m tradebot run AAPL TSLA
 
 # Emergency: cancel all orders and close all positions.
 python -m tradebot flatten
+
+# Backtest and time machine (never place orders). See Backtesting below.
+python -m tradebot backtest AAPL NVDA
+python -m tradebot timemachine NVDA --at "2026-11-20 10:30"
 ```
 
 Set `trading.mode: dry_run` to run the full loop while only logging the orders
@@ -99,6 +103,206 @@ it would place.
 (tickers with missing data are skipped without a call). With the default 5-minute
 scan interval and a 4-ticker watchlist that's up to about 280 calls a day.
 Raise `scan_interval_seconds` or shorten the watchlist to spend less.
+
+## Dashboard
+
+A live control-room view of the bot: the watchlist scan, each ticker's six
+checks with their values, Claude's JSON plan and the risk gate's verdict, open
+positions on a stop/entry/target ladder (watch the trailing stop move), risk
+limits in use, the event log, replay scores, and self-improvement proposals with
+approve and rollback buttons.
+
+```bash
+python -m tradebot dashboard              # http://127.0.0.1:8765/#token=...
+python -m tradebot dashboard --host 0.0.0.0   # open it from your phone on the same Wi-Fi
+python -m tradebot dashboard --demo       # simulated data, no keys, no bot needed
+```
+
+- It reads only the files the bot writes (`journal/trades.jsonl`,
+  `outcomes.jsonl`, `status.json`, `events.jsonl`, and `tuning/`). It needs no
+  API keys and never places, changes or cancels orders.
+- `run` now writes `journal/status.json` (account, positions, stops, limits,
+  what it's doing) every loop and appends to `journal/events.jsonl`. Run the
+  dashboard in a second terminal next to `run`.
+- The server prints a link with an access token; every data and action call
+  needs it. Set `TRADEBOT_DASHBOARD_TOKEN` to keep the same link across
+  restarts. Anyone with the link can see your positions and approve or roll
+  back settings, so only use `--host 0.0.0.0` on a network you trust.
+- **Approve** and **Roll back** do the same as the `approve` and `rollback`
+  commands (tap twice to confirm). A running bot picks up the new settings the
+  next time it starts.
+- Demo mode is labeled on every screen. Its prices, trades and P&L are made
+  up by the page. If the page can't reach the bot it falls back to demo and
+  says why.
+- Opening the page with no live data yet? It shows empty states until the
+  first scan, and "bot not running" until `run` writes its first status.
+
+![Dashboard on desktop (demo data)](docs/dashboard/desktop.jpg)
+
+## Backtesting
+
+Replay past days minute by minute with the **same** snapshot math, checklist,
+risk gate and exits as the live bot: stop-limit entries, bracket stop and
+target, the stop trailing 1R behind once a trade is up 1R, unfilled entries
+cancelled at 15:30 ET and everything flat at **15:50 ET**. It never places
+orders.
+
+### Quick start (no keys)
+
+```bash
+pip install -r requirements-dev.txt
+python -m tradebot backtest AAPL NVDA TSLA AMD          # last 20 trading days
+```
+
+With no Alpaca keys it uses Yahoo Finance's free chart data: real 1-minute bars
+for about the last 30 days, but **no news and no quotes**. So a gap of 2% or
+more at the open stands in for the catalyst check, and the spread is assumed to
+be 0.02%. The report says so at the top. Use it to see the machinery work, not
+as a verdict.
+
+### Real backtest (free Alpaca paper account)
+
+Alpaca gives real minute bars back to 2016, real news with publish times, and
+real quotes, all on the free plan (history older than 15 minutes can use the
+full SIP feed). Put your keys in `.env` on your own machine, never in chat:
+
+```bash
+cp .env.example .env        # then edit .env and fill in ALPACA_API_KEY / ALPACA_SECRET_KEY
+set -a; . ./.env; set +a    # macOS/Linux. Windows PowerShell: see below
+python -m tradebot backtest AAPL NVDA TSLA AMD --start 2026-09-01 --end 2026-11-25
+```
+
+Windows PowerShell instead of the `set -a` line:
+`Get-Content .env | ForEach-Object { if ($_ -match '^([^#=]+)=(.*)$') { Set-Item "env:$($matches[1])" $matches[2] } }`
+
+Fetched data is cached in `backtest_cache/`, so re-runs are instant and free.
+
+### What you get
+
+```
+trades 41 over 60 days (0.68/day)
+win rate 46.3%   avg +0.21R   total +8.6R   best +2.0R   worst -1.1R
+P&L $4,212.50 (+4.21%)   profit factor 1.42
+max drawdown $1,830.10 (1.79%, 4.20R)
+exits: {'target': 12, 'stop': 18, 'trail_stop': 6, 'flatten': 5}
+scans 9360, passed the first four checks 212, priced 58, approved 41
+top gate rejections: checklist failed x14; max open positions reached x3
+```
+(illustrative output, not a real result)
+
+Plus `backtests/<run>/results.json` and `trades.csv`, and the dashboard's
+**Backtest** panel shows the latest run: P&L, win rate, R multiples, drawdown,
+trades per day, an equity curve, an R histogram and every trade.
+
+### Rules-only vs Claude planner
+
+- `--planner rules` (default, free): the code's own checklist picks direction
+  from VWAP, enters one cent through the last price, puts the stop just beyond
+  the nearest level and the target at the next level or 2R. It measures your
+  checklist and exits, not Claude's judgment.
+- `--planner claude`: Claude plans each candidate, exactly as live. Only setups
+  that already pass catalyst, relative volume, liquidity and trend are sent
+  (the gate would reject the rest anyway). **Always estimate first:**
+
+  ```bash
+  python -m tradebot backtest --planner claude --estimate   # prints calls and ~$ cost, spends nothing
+  python -m tradebot backtest --planner claude              # refuses above backtest.max_cost_usd ($5) without --yes
+  ```
+
+  Needs `ANTHROPIC_API_KEY` in `.env` too. At Opus 5.5 prices ($4/$20 per
+  million tokens) and `high` effort, a call is roughly $0.07, so 100 candidate
+  setups cost about $7. `--max-calls N` is a hard cap.
+
+### No lookahead
+
+Checked by tests (`tests/test_backtest.py`), which poison every bar and headline
+after a cut-off and confirm no earlier decision changes:
+
+- A minute bar is visible only after it closes (at 10:30:00 the last bar seen is 10:29).
+- Daily bars (ATR, average volume, prior close) are finished sessions before today.
+- News counts only once published; quotes are the last one at or before the decision.
+- Orders fill from the next bar on. A bar touching both stop and target counts as
+  the stop; a bar opening through the stop exits at the open; stops and the
+  flatten pay 2 bps slippage.
+- Similar-setup lessons are used only once their outcome was known.
+
+Limits: shorts are assumed borrowable (no history of Alpaca's easy-to-borrow
+flag), and fills are modeled from bars, not the order book.
+
+## Time machine
+
+Drop the bot at any past minute and see what it would have done, then
+fast-forward and score it:
+
+```bash
+python -m tradebot timemachine NVDA AMD --at "2026-11-20 10:30"
+python -m tradebot timemachine --sample 50 --start 2026-10-01 --end 2026-11-25   # 50 random moments
+python -m tradebot timemachine NVDA --at "2026-11-20 10:30" --planner claude      # Claude plans it
+```
+
+1. **Rewind**: the snapshot is rebuilt exactly as it stood then (same rules as above).
+2. **Plan**: the rules planner or Claude plans from that snapshot alone.
+3. **Gate**: the same risk gate as live.
+4. **Fast-forward**: the following bars decide the result (stop, target,
+   trailing stop or 15:50 flatten, in R), alongside what the price did next.
+5. **Remember**: each scored setup goes into the **lesson library**
+   (`journal/lessons.jsonl`). From then on, the planner (live, backtest or
+   time machine) is shown the most similar past setups in the same direction
+   and how they ended, under `<similar_past_setups>`. Only outcomes known
+   before the moment being planned are shown. `backtest --learn` adds a
+   backtest's trades too. Turn it off with `backtest.show_similar_setups: false`.
+
+Claude was trained on data up to a cutoff, so for older dates it may already
+"know" what happened next. Use the most recent dates when testing Claude; the
+rules planner has no such problem.
+
+## Bot breeder (futures)
+
+`python -m tradebot breed` evolves futures day-trading bots and keeps a full
+family tree. Rules only: no Claude calls, no API keys, no orders.
+
+- **Markets:** ES, NQ, YM, RTY (stock index), CL (oil), GC (gold), ZN (10-year
+  note), 6E (euro), from Yahoo's free continuous front-month series. P&L is per
+  micro contract where one exists (MES, MNQ, MYM, M2K, MCL, MGC, M6E; ZN is full
+  size), with real tick sizes, a round-trip commission and 1 tick of slippage on
+  every stop and market fill. Each market trades only in its main day session
+  and is flat before it ends.
+- **Strategy families:** public, documented types used across institutional
+  desks and in published research, not any bank's proprietary strategies
+  (those aren't public): opening range breakout, VWAP mean reversion, intraday
+  momentum (Gao, Han, Li & Zhou 2018), and trend pullback with a time-series
+  momentum filter (Moskowitz, Ooi & Pedersen 2012). Carry isn't included: it
+  needs second-month prices the free data lacks, and it isn't a day trade.
+- **Genes:** family settings, entry window, direction, trend filter, stop and
+  target distances, breakeven, trailing and time stops, max trades a day, and
+  which markets to trade. Children come from crossover and mutation of
+  tournament-picked parents; the best of each generation survive as elites.
+- **Honesty rules:** the days are split by date into TRAIN (half), VALIDATE
+  and HOLDOUT (a quarter each). Breeding sees only TRAIN; the champion is
+  picked on VALIDATE; HOLDOUT is scored once. A bot only "passes" with
+  +0.05R a trade after costs, profit factor above 1.15, enough trades, and an
+  edge in both halves of TRAIN, so a tiny target with a wide stop can't win
+  by looking busy. A luck test reruns the whole breeder on scrambled prices.
+- **Data is short:** Yahoo keeps 5-minute bars for ~60 days and 1-minute bars
+  for ~30. That is a few weeks of one market regime, so read the 95% range on
+  the holdout win rate, not just the number.
+
+Run it in GitHub Actions (Actions → Breed → Run workflow) or locally:
+
+```bash
+python -m tradebot breed                       # Yahoo data, 3 runs x 50 generations x 100 bots
+python -m tradebot breed --source synthetic    # offline try-out on made-up prices
+```
+
+Each run writes `breeder_runs/latest.json`, `summary.md` and `tree.html` (a
+page that opens on its own). The workflow also saves them to `docs/breeder/`,
+and the dashboard shows them at `/breeder`: the verdict, the evolution chart,
+the family tree (click any bot for its genes, parents, mutations and scores),
+the champion's bloodline, finalists and holdout trades.
+
+Alpaca doesn't trade futures. Trading a bred bot live would need a futures
+broker (for example Interactive Brokers, Tradovate or NinjaTrader), and it
+should be paper traded first.
 
 ## Self-improvement
 

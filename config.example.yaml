@@ -54,3 +54,15 @@ improvement:              # self-improvement; see README
   max_drawdown_worsen_r: 1.0
   reviewer_model: claude-opus-5-5
   reviewer_effort: high
+
+backtest:                 # backtests and the time machine; never place orders
+  results_dir: backtests
+  cache_dir: backtest_cache
+  data_feed: sip          # free Alpaca accounts can use SIP for history older than 15 minutes
+  start_equity: 100000
+  slippage_bps: 2         # 0.02% paid on entries, stops and the 15:50 flatten
+  assume_spread_pct: 0.02 # only used when the data has no quotes (Yahoo)
+  proxy_gap_pct: 2.0      # only used when the data has no news (Yahoo): a 2% gap stands in for a catalyst
+  max_cost_usd: 5.0       # Claude-planner backtests estimated above this need --yes
+  library_path: journal/lessons.jsonl
+  show_similar_setups: true

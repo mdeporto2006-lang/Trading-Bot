@@ -10,6 +10,18 @@ Self-improvement:
   python -m tradebot proposals           # list proposals and their test results
   python -m tradebot approve <id>        # adopt a passed proposal
   python -m tradebot rollback [--to N]   # go back to an earlier settings version
+
+Backtesting:
+  python -m tradebot backtest AAPL NVDA --start 2026-10-01 --end 2026-10-31
+  python -m tradebot backtest --planner claude --estimate   # cost first
+  python -m tradebot timemachine NVDA --at "2026-11-20 10:30"
+
+Bot breeder (futures, rules only, free Yahoo data):
+  python -m tradebot breed --generations 50 --population 100 --seeds 3
+
+Dashboard:
+  python -m tradebot dashboard           # live dashboard at http://127.0.0.1:8765
+  python -m tradebot dashboard --demo    # simulated data, no keys needed
 """
 
 from __future__ import annotations
@@ -56,18 +68,51 @@ def main(argv: list[str] | None = None) -> None:
     p_ap.add_argument("proposal_id")
     p_rb = sub.add_parser("rollback", help="return to an earlier settings version")
     p_rb.add_argument("--to", type=int, default=None, help="version number (0 = config.yaml only)")
+    p_db = sub.add_parser("dashboard", help="serve the live dashboard (reads the journal; needs no API keys)")
+    p_db.add_argument("--host", default="127.0.0.1",
+                      help="interface to listen on; use 0.0.0.0 to open it from your phone on the same Wi-Fi")
+    p_db.add_argument("--port", type=int, default=8765)
+    p_db.add_argument("--demo", action="store_true", help="show simulated data instead of the bot's files")
+    p_db.add_argument("--token", default=None,
+                      help="access token (default: $TRADEBOT_DASHBOARD_TOKEN or a new random one)")
+    from .backtest.commands import add_parsers, run_backtest, run_timemachine
+
+    add_parsers(sub)
+    from .breeder.commands import add_parser as add_breed_parser
+
+    add_breed_parser(sub)
     args = ap.parse_args(argv)
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    if args.cmd == "breed":  # rules only, never places orders
+        from .breeder.commands import run_breed
+
+        try:
+            run_breed(args)
+        except RuntimeError as e:
+            sys.exit(f"breed stopped: {e}")
+        return
+    if args.cmd == "dashboard":
+        from .dashboard.server import serve
+
+        serve(args.config, host=args.host, port=args.port, demo=args.demo,
+              token=args.token or os.environ.get("TRADEBOT_DASHBOARD_TOKEN"))
+        return
     base_cfg = Config.load(args.config)
     store = TuningStore(base_cfg.improvement.dir)
     try:
         cfg = store.layer(base_cfg)  # adopted self-improvements on top of config.yaml
     except TuningError as e:
         sys.exit(f"tuning/active.yaml is invalid ({e}); fix it or run `rollback --to 0`")
+    if args.cmd in ("backtest", "timemachine"):  # never place orders, in any mode
+        try:
+            (run_backtest if args.cmd == "backtest" else run_timemachine)(args, cfg)
+        except RuntimeError as e:  # data source trouble: say what happened, no traceback
+            sys.exit(f"{args.cmd} stopped: {e}")
+        return
     try:
         assert_mode_allowed(cfg)
     except LiveTradingNotAllowed as e:
@@ -117,11 +162,22 @@ def main(argv: list[str] | None = None) -> None:
     def end_of_day() -> None:
         n = score_journal(journal, data, cfg, datetime.now(timezone.utc))
         logging.info("scored %d plans", n)
+        now = datetime.now(timezone.utc)
+        runner.telemetry.event(now, "score", f"Scored {n} plans by replaying them on later bars")
         if cfg.improvement.review_after_close:
             p = run_review(cfg, journal, store)
             logging.info("review %s: %s (%s)", p["id"], p["status"], p.get("verdict", ""))
+            runner.telemetry.event(
+                datetime.now(timezone.utc), "review",
+                f"Self-review {p['id']}: {p['status']} ({p.get('verdict', '')})"[:240],
+                proposal_id=p["id"], status=p["status"],
+            )
 
     runner = Runner(cfg, data, ClaudePlanner(cfg), broker, journal, on_close=end_of_day)
+    if cfg.backtest.show_similar_setups:
+        from .backtest.library import LessonLibrary
+
+        runner.library = LessonLibrary(cfg.backtest.library_path)
 
     if args.cmd == "plan":
         for plan, decision in runner.scan_once(args.tickers, place_orders=False):
