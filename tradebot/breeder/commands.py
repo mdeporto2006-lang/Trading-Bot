@@ -37,6 +37,10 @@ def add_parser(sub) -> None:
     p.add_argument("--no-null", action="store_true", help="skip the luck test on scrambled prices")
     p.add_argument("--cache", default="backtest_cache/futures")
     p.add_argument("--out", default="breeder_runs")
+    p.add_argument("--archive", default=None,
+                   help="folder of saved bars: each Yahoo fetch is merged in, so history grows past 60 days")
+    p.add_argument("--hall-of-fame", default=None,
+                   help="hall of fame JSON to update with this run (nominate, re-score, promote, retire)")
 
 
 def _summ(b: Breeder, sel: dict, seed: int) -> dict:
@@ -49,7 +53,7 @@ def _summ(b: Breeder, sel: dict, seed: int) -> dict:
 def run_breed(args) -> None:
     say = lambda s: print(s, file=sys.stderr, flush=True)
     if args.source == "yahoo":
-        data = fetch_yahoo(args.symbols, args.interval, args.cache)
+        data = fetch_yahoo(args.symbols, args.interval, args.cache, getattr(args, "archive", None))
     else:
         data = synthetic(args.symbols, days=40, interval=args.interval)
     data = {k: v for k, v in data.items() if v}
@@ -84,3 +88,10 @@ def run_breed(args) -> None:
     paths = save(rep, args.out)
     print((paths["md"]).read_text())
     say(f"Saved {', '.join(str(p) for p in paths.values())}")
+    if getattr(args, "hall_of_fame", None):
+        from . import halloffame as hf
+        hof = hf.load(args.hall_of_fame)
+        hf.update(hof, [(b, s, m) for b, s, m in runs], data, opts.slip_ticks, progress=say)
+        path = hf.save(hof, args.hall_of_fame)
+        print(path.with_suffix(".md").read_text())
+        say(f"Saved {path} and {path.with_suffix('.md')}")

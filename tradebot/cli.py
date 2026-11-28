@@ -19,6 +19,11 @@ Backtesting:
 Bot breeder (futures, rules only, free Yahoo data):
   python -m tradebot breed --generations 50 --population 100 --seeds 3
 
+Paper trading on NinjaTrader's simulator (see docs/ninjatrader/SETUP.md):
+  python -m tradebot paper export        # top hall-of-fame bots -> bots.txt for NinjaTrader
+  python -m tradebot paper compare       # paper results vs the backtest
+  python -m tradebot paper kill          # kill switch: every BredBot flattens and stops
+
 Dashboard:
   python -m tradebot dashboard           # live dashboard at http://127.0.0.1:8765
   python -m tradebot dashboard --demo    # simulated data, no keys needed
@@ -81,6 +86,9 @@ def main(argv: list[str] | None = None) -> None:
     from .breeder.commands import add_parser as add_breed_parser
 
     add_breed_parser(sub)
+    from .paper.commands import add_parser as add_paper_parser
+
+    add_paper_parser(sub)
     args = ap.parse_args(argv)
 
     logging.basicConfig(
@@ -94,6 +102,11 @@ def main(argv: list[str] | None = None) -> None:
             run_breed(args)
         except RuntimeError as e:
             sys.exit(f"breed stopped: {e}")
+        return
+    if args.cmd == "paper":  # never places orders; NinjaTrader's BredBot strategy does, on sim accounts only
+        from .paper.commands import run_paper
+
+        run_paper(args)
         return
     if args.cmd == "dashboard":
         from .dashboard.server import serve

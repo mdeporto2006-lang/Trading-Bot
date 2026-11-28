@@ -9,3 +9,4 @@ tuning/
 backtests/
 backtest_cache/
 breeder_runs/
+ninjatrader_out/
