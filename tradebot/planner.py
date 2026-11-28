@@ -51,17 +51,27 @@ OUTPUT: one JSON object for the ticker, matching the schema. mode is "DAY".
     return prompt
 
 
-def user_message(snap: MarketSnapshot) -> str:
+def user_message(snap: MarketSnapshot, similar: dict | None = None) -> str:
     data = snap.model_dump(mode="json", exclude={"news"})
     news = [
         {"age_hours": n.age_hours, "source": n.source, "headline": n.headline, "summary": n.summary}
         for n in snap.news
     ]
-    return (
+    msg = (
         f"Plan a DAY trade for {snap.ticker}.\n\n"
         f"<market_data>\n{json.dumps(data, indent=2)}\n</market_data>\n\n"
         f"<untrusted_news>\n{json.dumps(news, indent=2)}\n</untrusted_news>"
     )
+    if similar:
+        # From the lesson library (time machine / backtests): how the most
+        # similar past setups actually ended. Numbers only; all finished before now.
+        msg += (
+            "\n\n<similar_past_setups>\n"
+            "How the most similar past setups in this direction actually ended (R = multiples of risk). "
+            "Use them as evidence when judging this setup; they never relax the checklist.\n"
+            f"{json.dumps(similar, indent=2)}\n</similar_past_setups>"
+        )
+    return msg
 
 
 def no_trade(ticker: str, reason: str) -> TradePlan:
@@ -84,7 +94,7 @@ class ClaudePlanner:
             client = anthropic.Anthropic()
         self.client = client
 
-    def plan(self, snap: MarketSnapshot) -> TradePlan:
+    def plan(self, snap: MarketSnapshot, similar: dict | None = None) -> TradePlan:
         if snap.missing:
             # Don't spend a model call when the rules already say NO_TRADE.
             return no_trade(snap.ticker, "missing data: " + ", ".join(snap.missing))
@@ -94,7 +104,7 @@ class ClaudePlanner:
             model=p.model,
             max_tokens=p.max_tokens,
             system=system_prompt(self.cfg),
-            messages=[{"role": "user", "content": user_message(snap)}],
+            messages=[{"role": "user", "content": user_message(snap, similar)}],
             output_config={"effort": p.effort},
             output_format=TradePlan,
         )

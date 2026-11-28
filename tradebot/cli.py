@@ -11,6 +11,11 @@ Self-improvement:
   python -m tradebot approve <id>        # adopt a passed proposal
   python -m tradebot rollback [--to N]   # go back to an earlier settings version
 
+Backtesting:
+  python -m tradebot backtest AAPL NVDA --start 2026-10-01 --end 2026-10-31
+  python -m tradebot backtest --planner claude --estimate   # cost first
+  python -m tradebot timemachine NVDA --at "2026-11-20 10:30"
+
 Dashboard:
   python -m tradebot dashboard           # live dashboard at http://127.0.0.1:8765
   python -m tradebot dashboard --demo    # simulated data, no keys needed
@@ -67,6 +72,9 @@ def main(argv: list[str] | None = None) -> None:
     p_db.add_argument("--demo", action="store_true", help="show simulated data instead of the bot's files")
     p_db.add_argument("--token", default=None,
                       help="access token (default: $TRADEBOT_DASHBOARD_TOKEN or a new random one)")
+    from .backtest.commands import add_parsers, run_backtest, run_timemachine
+
+    add_parsers(sub)
     args = ap.parse_args(argv)
 
     logging.basicConfig(
@@ -85,6 +93,12 @@ def main(argv: list[str] | None = None) -> None:
         cfg = store.layer(base_cfg)  # adopted self-improvements on top of config.yaml
     except TuningError as e:
         sys.exit(f"tuning/active.yaml is invalid ({e}); fix it or run `rollback --to 0`")
+    if args.cmd in ("backtest", "timemachine"):  # never place orders, in any mode
+        try:
+            (run_backtest if args.cmd == "backtest" else run_timemachine)(args, cfg)
+        except RuntimeError as e:  # data source trouble: say what happened, no traceback
+            sys.exit(f"{args.cmd} stopped: {e}")
+        return
     try:
         assert_mode_allowed(cfg)
     except LiveTradingNotAllowed as e:
@@ -146,6 +160,10 @@ def main(argv: list[str] | None = None) -> None:
             )
 
     runner = Runner(cfg, data, ClaudePlanner(cfg), broker, journal, on_close=end_of_day)
+    if cfg.backtest.show_similar_setups:
+        from .backtest.library import LessonLibrary
+
+        runner.library = LessonLibrary(cfg.backtest.library_path)
 
     if args.cmd == "plan":
         for plan, decision in runner.scan_once(args.tickers, place_orders=False):

@@ -124,6 +124,26 @@ class Runner:
         except Exception:
             log.exception("could not publish status")
 
+    # ---- lesson library (time machine / backtests) ---------------------
+    library = None  # set to a LessonLibrary to show the planner similar past setups
+
+    def _similar_setups(self, snap, now: datetime):
+        if self.library is None or not self.library.items:
+            return None
+        try:
+            from .backtest.library import features, summarize
+            from .backtest.rules_planner import direction_for
+
+            d = direction_for(snap)
+            if not d or not snap.atr or not snap.last_price:
+                return None
+            lp, a = snap.last_price, snap.atr
+            probe = features(snap, lp, lp - a if d == "long" else lp + a, lp + 2 * a if d == "long" else lp - 2 * a)
+            return summarize(self.library.similar(probe, d, now))
+        except Exception:
+            log.exception("similar-setup lookup failed")
+            return None
+
     # ---- entries -------------------------------------------------------
     def scan_once(
         self, tickers: list[str], place_orders: bool = True
@@ -144,7 +164,8 @@ class Runner:
                 continue
             tel.update(now, activity={"kind": "planning", "ticker": t, "since": now.isoformat()})
             snap = self.data.snapshot(t, now)
-            plan = self.planner.plan(snap)
+            similar = self._similar_setups(snap, now)
+            plan = self.planner.plan(snap, similar=similar) if similar else self.planner.plan(snap)
             decision = evaluate_plan(plan, snap, self.cfg, acct, now)
             order_id = None
             if decision.approved and place_orders:
