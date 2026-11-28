@@ -333,6 +333,26 @@ ul.reasons { margin: 0 0 8px; padding-left: 16px; font-size: 11px; color: #ffb3c
   .wrow.planning, .btn.armed, .ladder .px::after { animation: none; }
 }
 .hide { display: none !important; }
+
+/* ---------- backtest + time machine ---------- */
+.bt-warn { font-size: 10.5px; color: var(--warn); margin: 0 0 6px; }
+.bt-grid { display: grid; gap: 10px; }
+@media (min-width: 760px) { .bt-grid { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
+.bt-curve { position: relative; height: 170px; border: 1px solid var(--line); background: rgba(0,0,0,.2); }
+.bt-curve svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.bt-hist { display: flex; align-items: flex-end; gap: 3px; height: 110px; border-bottom: 1px solid var(--line); padding-top: 4px; }
+.bt-hist div { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; min-width: 0; }
+.bt-hist i { display: block; width: 100%; min-height: 1px; }
+.bt-hist span { font-size: 9px; color: var(--dim); margin-top: 2px; }
+.bt-trades { max-height: 260px; overflow: auto; margin-top: 8px; }
+.bt-trades table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 520px; }
+.bt-trades th { position: sticky; top: 0; background: var(--panel); text-align: left; font: 600 9.5px/1.4 var(--f-display); letter-spacing: .1em; color: var(--dim); text-transform: uppercase; padding: 3px 6px; }
+.bt-trades td { padding: 3px 6px; border-top: 1px dotted var(--faint); white-space: nowrap; }
+.tm-list { display: grid; gap: 6px; max-height: 470px; overflow: auto; }
+.tm { border: 1px solid var(--line); padding: 6px 8px; background: rgba(0,0,0,.2); font-size: 11px; }
+.tm .h { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.tm .h b { font: 700 13px/1 var(--f-display); letter-spacing: .06em; }
+.tm .why { color: var(--dim); margin-top: 3px; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -421,6 +441,16 @@ ul.reasons { margin: 0 0 8px; padding-left: 16px; font-size: 11px; color: #ffb3c
   <section class="panel s4" aria-labelledby="h-heat">
     <div class="ph"><h2 id="h-heat">Replay scores</h2><span class="meta" id="heat-meta">last 30 days</span></div>
     <div id="heat"></div>
+  </section>
+
+  <section class="panel s8" aria-labelledby="h-bt">
+    <div class="ph"><h2 id="h-bt">Backtest</h2><span class="meta" id="bt-meta">latest run</span></div>
+    <div id="bt"></div>
+  </section>
+
+  <section class="panel s4" aria-labelledby="h-tm">
+    <div class="ph"><h2 id="h-tm">Time machine</h2><span class="meta" id="tm-meta">plans made with only what was known then</span></div>
+    <div id="tm"></div>
   </section>
 
   <section class="panel s12" aria-labelledby="h-imp" style="grid-column: span 12">
@@ -1250,9 +1280,79 @@ function renderTape() {
   const tr = $("#tape"); if (tr.dataset.h !== html) { tr.innerHTML = html; tr.dataset.h = html; }
 }
 
+
+function renderBacktest() {
+  const b = D.backtest;
+  if (!b) {
+    $("#bt-meta").textContent = "no runs yet";
+    $("#bt").innerHTML = `<div class="empty">No backtest yet. Run <code>python -m tradebot backtest</code> and this panel shows the latest run.${MODE === "demo" ? " (Demo mode shows no backtest.)" : ""}</div>`;
+    return;
+  }
+  const m = b.metrics || {}, dd = b.decisions || {};
+  $("#bt-meta").textContent = `${b.start} → ${b.end} · ${(b.tickers || []).join(" ")} · ${b.source} data`;
+  let h = (b.warnings || []).map((w) => `<p class="bt-warn">! ${esc(w)}</p>`).join("");
+  h += `<div class="stats">
+    <div class="stat"><div class="l">Net P&amp;L</div><div class="v ${cls(m.net_pnl)}">${money(m.net_pnl, 0)}</div></div>
+    <div class="stat"><div class="l">Win rate</div><div class="v">${m.trades ? num(m.win_rate_pct, 0) + "%" : "—"}</div></div>
+    <div class="stat"><div class="l">Avg R</div><div class="v ${cls(m.avg_r)}">${signed(m.avg_r, 2)}</div></div>
+    <div class="stat"><div class="l">Max DD</div><div class="v dn">${num(m.max_drawdown_pct, 2)}%</div></div></div>
+    <div class="stats">
+    <div class="stat"><div class="l">Trades</div><div class="v">${m.trades ?? 0}</div></div>
+    <div class="stat"><div class="l">Per day</div><div class="v">${num(m.trades_per_day, 1)}</div></div>
+    <div class="stat"><div class="l">Total R</div><div class="v ${cls(m.total_r)}">${signed(m.total_r, 1)}</div></div>
+    <div class="stat"><div class="l">Profit factor</div><div class="v">${m.profit_factor == null ? "—" : num(m.profit_factor, 2)}</div></div></div>`;
+  const ec = b.equity_curve || [];
+  let curve = `<div class="empty">No trading days in range.</div>`;
+  if (ec.length) {
+    const pts = [{ equity: b.start_equity }, ...ec], vs = pts.map((p) => p.equity);
+    const lo = Math.min(...vs), hi = Math.max(...vs), rng = hi - lo || 1;
+    const xy = pts.map((p, i) => `${(i / Math.max(1, pts.length - 1) * 100).toFixed(2)},${(95 - (p.equity - lo) / rng * 85).toFixed(2)}`).join(" ");
+    const base = (95 - (b.start_equity - lo) / rng * 85).toFixed(2), up = vs[vs.length - 1] >= b.start_equity;
+    curve = `<div class="bt-curve" title="Equity at each day's close"><svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Backtest equity curve">
+      <line x1="0" x2="100" y1="${base}" y2="${base}" stroke="var(--faint)" stroke-dasharray="1.5 1.5" stroke-width=".5" vector-effect="non-scaling-stroke"/>
+      <polyline points="${xy}" fill="none" stroke="${up ? "var(--good)" : "var(--bad)"}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg></div>
+      <p class="note">Equity at each day's close, from ${money(b.start_equity, 0)}. ${ec.length} trading days.</p>`;
+  }
+  const hist = m.r_histogram || {}, hk = Object.keys(hist), hmax = Math.max(1, ...Object.values(hist));
+  const histH = hk.length ? `<div class="bt-hist" aria-label="Trades by R multiple">${hk.map((k) => `<div title="${hist[k]} trades near ${k}R"><i style="height:${hist[k] / hmax * 100}%;background:${parseFloat(k) > 0 ? "var(--good)" : "var(--bad)"}"></i><span>${k}</span></div>`).join("")}</div>
+    <p class="note">Trades by result in R. Exits: ${Object.entries(m.exit_reasons || {}).map(([k, v]) => `${esc(k.replace("_", " "))} ${v}`).join(" · ") || "none"}.</p>` : `<div class="empty">No trades.</div>`;
+  h += `<div class="bt-grid"><div>${curve}</div><div>${histH}
+    <p class="note">${dd.scans || 0} scans · ${dd.prefilter_pass || 0} passed catalyst, volume, liquidity and trend · ${dd.priced || 0} priced · ${dd.approved || 0} approved${dd.planner_calls ? ` · ${dd.planner_calls} Claude calls` : ""}. Planner: ${esc(b.planner)}.</p></div></div>`;
+  const tr = (b.trades || []).slice().reverse();
+  if (tr.length) {
+    h += `<div class="bt-trades"><table><thead><tr><th>Day</th><th>Ticker</th><th>Side</th><th>Entry</th><th>Exit</th><th>How</th><th>R</th><th>P&amp;L</th></tr></thead><tbody>${tr.map((t) => `<tr>
+      <td>${esc(t.day)} ${hhmm(etParts(Date.parse(t.entry_time)).min)}</td><td><b>${esc(t.ticker)}</b></td><td>${t.direction === "long" ? "BUY" : "SHORT"}</td>
+      <td>${num(t.entry)}</td><td>${num(t.exit)} <span class="muted">${hhmm(etParts(Date.parse(t.exit_time)).min)}</span></td><td>${esc(t.exit_reason.replace("_", " "))}</td>
+      <td class="${cls(t.r_multiple)}">${signed(t.r_multiple, 2)}</td><td class="${cls(t.pnl)}">${money(t.pnl, 0)}</td></tr>`).join("")}</tbody></table></div>`;
+  }
+  $("#bt").innerHTML = h;
+}
+
+function renderTimeMachine() {
+  const vs = (D.timemachine || []).slice().reverse(), lib = D.library || {};
+  let h = `<div class="stats" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    <div class="stat"><div class="l">Lessons</div><div class="v">${lib.count ?? 0}</div></div>
+    <div class="stat"><div class="l">Won</div><div class="v">${lib.count ? Math.round(lib.wins / lib.count * 100) + "%" : "—"}</div></div>
+    <div class="stat"><div class="l">Avg R</div><div class="v ${cls(lib.avg_r)}">${signed(lib.avg_r, 2)}</div></div></div>
+    <p class="note" style="margin:-2px 0 8px">Lesson library: scored past setups. The planner is shown the closest ones whose outcome was already known.</p>`;
+  if (!vs.length) h += `<div class="empty">No visits yet. Try <code>python -m tradebot timemachine NVDA --at "2026-11-20 10:30"</code>.</div>`;
+  else h += `<div class="tm-list">` + vs.map((v) => {
+    const p = v.plan || {}, d = v.decision || {}, o = v.outcome, nx = v.what_happened_next, sim = v.similar_setups;
+    const when = new Date(v.at).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+    const act = p.action === "NO_TRADE" ? `<span class="muted">NO TRADE</span>` : `<span class="${p.action === "BUY" ? "up" : "dn"}">${esc(p.action)}</span>`;
+    const res = o ? (o.triggered ? `<span class="${cls(o.r_multiple)}">${esc(o.exit_reason)} ${signed(o.r_multiple, 2, "R")}</span>` : `<span class="muted">never triggered</span>`) : "";
+    const gate = p.action !== "NO_TRADE" ? (d.approved ? `<span class="up">gate ok</span>` : `<span class="dn">gate no</span>`) : "";
+    return `<div class="tm"><div class="h"><b>${esc(v.ticker)}</b><span class="muted">${esc(when)} ET</span>${act}${gate}${res}</div>
+      <div class="why">${p.action === "NO_TRADE" ? esc(p.invalidation || "") : `entry ${num(p.entry_trigger)} · stop ${num(p.stop)} · target ${num(p.target)}`}</div>
+      ${nx ? `<div class="why">then: ${num(nx.price_then)} → high ${num(nx.high_after)} / low ${num(nx.low_after)} → ${num(nx.close_at_flatten)} at 15:50</div>` : ""}
+      ${sim ? `<div class="why">${sim.count} similar past setups: ${sim.wins} won, avg ${signed(sim.avg_r, 2, "R")}</div>` : ""}</div>`;
+  }).join("") + `</div>`;
+  $("#tm").innerHTML = h;
+}
+
 function renderAll() {
   if (!D) return;
-  renderHeader(); renderTimeline(); renderKPIs(); renderWatch(); renderGauges(); renderMatrix(); renderPlan(); renderPositions(); renderEvents(); renderHeat(); renderImprove(); renderTape();
+  renderHeader(); renderTimeline(); renderKPIs(); renderWatch(); renderGauges(); renderMatrix(); renderPlan(); renderPositions(); renderEvents(); renderHeat(); renderBacktest(); renderTimeMachine(); renderImprove(); renderTape();
   const st = D.status || {};
   $("#hud-model").textContent = D.config?.model || "—";
   $("#hud-last").textContent = MODE === "demo" ? (SIM.lastScanMin ? hhmm(SIM.lastScanMin) + " ET" : "—") : st.last_scan_at ? hhmm(etParts(Date.parse(st.last_scan_at)).min) + " ET" : "—";

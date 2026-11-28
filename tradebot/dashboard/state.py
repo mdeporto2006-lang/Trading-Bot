@@ -166,6 +166,9 @@ class DashboardState:
         proposals = store.list_proposals()[-20:]
 
         watchlist = (status or {}).get("watchlist") or cfg.trading.watchlist
+        backtest = self._backtest(cfg)
+        tm = self.cache.get(jdir / "timemachine.jsonl", _jsonl)[-40:]
+        lessons = self.cache.get(Path(cfg.backtest.library_path), _jsonl)
         return {
             "demo": False,
             "server_time": now.isoformat(),
@@ -189,4 +192,23 @@ class DashboardState:
             "outcomes": outcomes,
             "tuning": {"active": active, "history": history},
             "proposals": proposals,
+            "backtest": backtest,
+            "timemachine": tm,
+            "library": {
+                "count": len(lessons),
+                "wins": sum(1 for l in lessons if (l.get("r_multiple") or 0) > 0),
+                "avg_r": round(sum(l.get("r_multiple") or 0 for l in lessons) / len(lessons), 3) if lessons else None,
+            },
         }
+
+    def _backtest(self, cfg: Config) -> dict | None:
+        """The latest backtest run (backtests/latest.json), trimmed for the page."""
+        doc = self.cache.get(Path(cfg.backtest.results_dir) / "latest.json",
+                             lambda p: json.loads(p.read_text()) if p else None)
+        if not doc:
+            return None
+        keep = ("id", "created_at", "tickers", "start", "end", "source", "planner", "catalyst",
+                "start_equity", "warnings", "metrics", "decisions", "equity_curve")
+        out = {k: doc.get(k) for k in keep}
+        out["trades"] = (doc.get("trades") or [])[-300:]
+        return out

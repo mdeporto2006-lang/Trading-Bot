@@ -92,6 +92,21 @@ class ImprovementSettings(BaseModel):
     lessons: list[str] = Field(default_factory=list)
 
 
+class BacktestSettings(BaseModel):
+    """Backtests and the time machine. They never place orders."""
+
+    results_dir: str = "backtests"
+    cache_dir: str = "backtest_cache"  # fetched history is kept here; past data never changes
+    data_feed: Literal["iex", "sip"] = "sip"  # free Alpaca plans may use SIP for data > 15 min old
+    start_equity: float = 100_000.0
+    slippage_bps: float = 2.0  # paid on entries, stops and the flatten
+    assume_spread_pct: float = 0.02  # only for sources without quotes (Yahoo)
+    proxy_gap_pct: float = 2.0  # only for sources without news: a gap this big stands in for a catalyst
+    max_cost_usd: float = 5.0  # Claude-planner runs above this estimate need --yes
+    library_path: str = "journal/lessons.jsonl"  # lesson library: scored past setups
+    show_similar_setups: bool = True  # show the planner similar past setups (live, backtest, time machine)
+
+
 class Config(BaseModel):
     setup: SetupThresholds = Field(default_factory=SetupThresholds)
     exits: ExitRules = Field(default_factory=ExitRules)
@@ -100,6 +115,7 @@ class Config(BaseModel):
     planner: PlannerSettings = Field(default_factory=PlannerSettings)
     trading: TradingSettings = Field(default_factory=TradingSettings)
     improvement: ImprovementSettings = Field(default_factory=ImprovementSettings)
+    backtest: BacktestSettings = Field(default_factory=BacktestSettings)
 
     @classmethod
     def load(cls, path: str | os.PathLike | None = None) -> "Config":
