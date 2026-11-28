@@ -231,6 +231,8 @@ class Breeder:
         for b in finalists:  # shown for context, NOT used to pick the champion
             b["holdout"] = _slim(self._score(b["genes"], self.hold))
         champ["champion"] = True
+        # Stress test: the same holdout with double slippage (2 ticks a fill).
+        champ["holdout_2tick"] = _slim(metrics(run(champ["genes"], self.data, self.hold, o.slip_ticks * 2)))
         lineage = self.lineage(champ["id"])
         for bid in lineage:
             self.bots[bid]["on_champion_line"] = True

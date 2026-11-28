@@ -42,11 +42,12 @@ def verdict(champ: dict, target: float, min_hold: int, null: dict | None) -> dic
     lines.append(f"HOLDOUT (never seen, the honest number): {_pct(h.get('win_rate'))} over {n} trades, "
                  f"{h.get('exp_r', 0):+.3f}R per trade, profit factor {h.get('pf', 0):.2f}. "
                  f"With only {n} trades the true win rate could be anywhere from {_pct(lo)} to {_pct(hi)} (95% range).")
-    if reached and lo >= target:
-        head = f"Reached {_pct(target)}+ out of sample, and the result is statistically solid."
+    if reached and lo >= target and n >= 100:
+        head = f"Reached {_pct(target)}+ out of sample on {n} holdout trades, with the 95% range above {_pct(target)}."
     elif reached:
-        head = (f"Hit {_pct(target)}+ on the holdout with positive expectancy, but on too few trades to call it "
-                f"real: the 95% range dips to {_pct(lo)}. Treat it as a candidate for paper trading, not a proven bot.")
+        head = (f"Hit {_pct(target)}+ on days it never saw ({_pct(h['win_rate'])} over {n} trades, "
+                f"{h['exp_r']:+.2f}R a trade), but {n} trades over a few weeks is not proof: the 95% range runs "
+                f"{_pct(lo)}–{_pct(hi)}. A candidate to paper trade, not a proven bot.")
     elif money:
         head = (f"Did not reach {_pct(target)} out of sample. The champion made money on the holdout "
                 f"({h['exp_r']:+.3f}R per trade) at a {_pct(h['win_rate'])} win rate.")
@@ -62,7 +63,11 @@ def verdict(champ: dict, target: float, min_hold: int, null: dict | None) -> dic
                      + (f"did {_pct(nh['win_rate'])} ({nh['exp_r']:+.3f}R) over {nh['trades']} trades on its holdout. "
                         if nh.get("trades") else "made no trades on its holdout. ")
                      + "That is what luck alone can do in-sample, so only the holdout number counts.")
-    return {"headline": head, "reached": reached, "solid": reached and lo >= target, "lines": lines,
+    s2 = champ.get("holdout_2tick")
+    if s2 and s2.get("trades"):
+        lines.append(f"Stress test, holdout with double slippage (2 ticks a fill): {_pct(s2['win_rate'])}, "
+                     f"{s2['exp_r']:+.3f}R per trade, profit factor {s2['pf']:.2f}.")
+    return {"headline": head, "reached": reached, "solid": reached and lo >= target and n >= 100, "lines": lines,
             "holdout_ci95": [lo, hi]}
 
 
@@ -71,7 +76,8 @@ def _strip(b: dict, keep_genes: bool) -> dict:
                              "alive_until", "children") if k in b}
     t = b["train"]
     out["t"] = {"n": t["trades"], "wr": t["win_rate"], "er": t["exp_r"], "pf": t["pf"]}
-    for k in ("finalist", "champion", "on_champion_line", "val_fitness", "val_passes", "validate", "holdout"):
+    for k in ("finalist", "champion", "on_champion_line", "val_fitness", "val_passes", "validate", "holdout",
+              "holdout_2tick"):
         if k in b:
             out[k] = b[k]
     if keep_genes:
