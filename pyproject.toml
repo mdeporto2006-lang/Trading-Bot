@@ -14,10 +14,11 @@ dependencies = [
 tradebot = "tradebot.cli:main"
 
 [tool.setuptools]
-packages = ["tradebot", "tradebot.improve", "tradebot.dashboard", "tradebot.backtest"]
+packages = ["tradebot", "tradebot.improve", "tradebot.dashboard", "tradebot.backtest", "tradebot.breeder"]
 
 [tool.setuptools.package-data]
 "tradebot.dashboard" = ["static/*.html"]
+"tradebot.breeder" = ["static/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

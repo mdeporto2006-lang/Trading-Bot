@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bot Breeder Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: one column of instrument panels (verdict, evolution chart, family tree, tables), same
+   control-room look as the bot dashboard. Single dark look by choice, every color set here. */
+:root {
+  color-scheme: dark;
+  --bg: #03080b; --panel: #061117; --panel-2: #0a1a22;
+  --line: rgba(80, 220, 210, .16); --line-2: rgba(80, 220, 210, .32);
+  --fg: #cdeeee; --dim: #6f9ca0; --faint: #2a4a50;
+  --teal: #2ff3d2; --cyan: #3cc8ff; --good: #3dff9b; --warn: #ffb648; --bad: #ff4f6d; --gold: #ffd36b; --violet: #a596ff;
+  --f-orb: #2ff3d2; --f-vwap_revert: #a596ff; --f-intraday_mom: #ffb648; --f-trend_pullback: #3cc8ff;
+  --f-display: "Chakra Petch", "Rajdhani", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--fg); }
+body {
+  margin: 0; font: 13px/1.5 var(--f-mono); font-variant-numeric: tabular-nums;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 12px 56px; overflow-x: hidden;
+  background: radial-gradient(1200px 600px at 50% -10%, rgba(47, 243, 210, .07), transparent 60%), var(--bg);
+}
+button, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 14px; }
+header { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; }
+h1 { margin: 0; font: 700 22px/1.1 var(--f-display); letter-spacing: .06em; }
+h1 b { color: var(--teal); }
+.sub { color: var(--dim); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+h2 { margin: 0 0 10px; font: 600 12px/1.2 var(--f-display); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); }
+.panel { border: 1px solid var(--line); background: var(--panel); padding: 14px; min-width: 0; }
+.headline { font: 600 18px/1.35 var(--f-display); text-wrap: balance; margin: 0 0 6px; }
+.headline.no { color: var(--warn); } .headline.yes { color: var(--good); }
+.lines { margin: 8px 0 0; padding-left: 18px; color: var(--fg); max-width: 110ch; }
+.lines li { margin: 3px 0; }
+.splits { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin-top: 12px; }
+.split { border: 1px solid var(--line); background: var(--panel-2); padding: 12px; display: grid; gap: 6px; }
+.split.hold { border-color: var(--line-2); box-shadow: inset 0 0 0 1px rgba(47,243,210,.15); }
+.split .lab { font: 600 11px/1.2 var(--f-display); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+.split .big { font: 700 34px/1 var(--f-display); }
+.split .row { display: flex; justify-content: space-between; gap: 8px; color: var(--dim); font-size: 12px; }
+.split .row b { color: var(--fg); font-weight: 500; }
+.meter { position: relative; height: 10px; background: rgba(255,255,255,.05); border: 1px solid var(--line); }
+.meter .ci { position: absolute; top: 2px; bottom: 2px; background: rgba(60,200,255,.35); }
+.meter .pt { position: absolute; top: -3px; bottom: -3px; width: 3px; background: var(--fg); }
+.meter .goal { position: absolute; top: -5px; bottom: -5px; border-left: 2px dashed var(--gold); }
+.pos { color: var(--good); } .neg { color: var(--bad); } .mid { color: var(--warn); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 11.5px; color: var(--dim); align-items: center; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.btn { cursor: pointer; border: 1px solid var(--line-2); background: rgba(47,243,210,.06); padding: 5px 10px;
+  font: 600 11px/1.2 var(--f-display); letter-spacing: .12em; text-transform: uppercase; color: var(--teal); }
+.btn[aria-pressed="true"] { background: rgba(47,243,210,.2); color: var(--fg); }
+.scroll { overflow: auto; border: 1px solid var(--line); background: #02060a; }
+.scroll.tree { max-height: 620px; }
+svg text { font-family: var(--f-mono); }
+.tree-grid { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 12px; }
+@media (max-width: 900px) { .tree-grid { grid-template-columns: minmax(0, 1fr); } }
+.detail { border: 1px solid var(--line); background: var(--panel-2); padding: 12px; font-size: 12px; min-width: 0; max-height: 620px; overflow: auto; }
+.detail h3 { margin: 0 0 4px; font: 700 16px/1.2 var(--f-display); }
+.detail .about { color: var(--fg); margin: 6px 0; }
+.detail dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 6px 0; }
+.detail dt { color: var(--dim); } .detail dd { margin: 0; }
+.detail ul { margin: 4px 0; padding-left: 16px; }
+.link { color: var(--cyan); cursor: pointer; text-decoration: underline; background: none; border: 0; padding: 0; }
+.tag { display: inline-block; padding: 1px 6px; border: 1px solid var(--line-2); font: 600 10px/1.4 var(--f-display); letter-spacing: .1em; text-transform: uppercase; margin-right: 4px; }
+.tag.gold { color: var(--gold); border-color: rgba(255,211,107,.5); }
+table { border-collapse: collapse; width: 100%; font-size: 12px; }
+th, td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th { color: var(--dim); font: 600 10.5px/1.2 var(--f-display); letter-spacing: .12em; text-transform: uppercase; }
+td:first-child, th:first-child, td.l, th.l { text-align: left; }
+tr.champ td { background: rgba(255,211,107,.07); }
+.chain { display: grid; gap: 4px; font-size: 12px; }
+.chain div { display: grid; grid-template-columns: 90px 1fr; gap: 8px; }
+.note { color: var(--dim); font-size: 12px; max-width: 110ch; }
+.warns { margin: 0; padding-left: 18px; color: var(--dim); font-size: 12px; }
+.empty { color: var(--warn); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>BOT <b>BREEDER</b> LAB</h1>
+    <span class="sub" id="meta">loading…</span>
+  </header>
+
+  <section class="panel" id="verdict">
+    <h2>Verdict</h2>
+    <p class="headline" id="headline">Loading the latest breeding run…</p>
+    <div class="splits" id="splits"></div>
+    <ul class="lines" id="lines"></ul>
+  </section>
+
+  <section class="panel">
+    <h2>Evolution, generation by generation (train days only)</h2>
+    <div class="legend" id="evo-legend"></div>
+    <div class="scroll"><svg id="evo" height="230"></svg></div>
+  </section>
+
+  <section class="panel">
+    <h2>Family tree</h2>
+    <div class="controls">
+      <button class="btn" id="show-surv" aria-pressed="true">Bots with offspring</button>
+      <button class="btn" id="show-all" aria-pressed="false">Every bot</button>
+      <button class="btn" id="show-line" aria-pressed="false">Champion's bloodline</button>
+      <span class="legend" id="fam-legend"></span>
+    </div>
+    <p class="note">Columns are generations, left to right. Each dot is a bot, colored by strategy family; bigger and brighter means fitter on the training days. A line is a parent-to-child link. A horizontal bar means the bot survived as an elite into later generations. Faded dots are dead ends: they had no children. Gold is the champion and its ancestors. Click any bot.</p>
+    <div class="tree-grid">
+      <div class="scroll tree"><svg id="tree"></svg></div>
+      <aside class="detail" id="detail"><span class="note">Click a bot in the tree to see its genes, parents, mutations and scores.</span></aside>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Champion's bloodline, oldest ancestor first</h2>
+    <div class="chain" id="chain"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Finalists (best on train; champion picked on validate)</h2>
+    <p class="note">Holdout is shown for every finalist so you can see how much luck there is between them, but it was not used to choose the champion.</p>
+    <div class="scroll"><table id="finalists"></table></div>
+  </section>
+
+  <section class="panel">
+    <h2>Every breeding run, luck test and textbook versions</h2>
+    <div class="scroll"><table id="seeds"></table></div>
+  </section>
+
+  <section class="panel">
+    <h2>Champion's holdout trades</h2>
+    <div class="scroll"><table id="trades"></table></div>
+  </section>
+
+  <section class="panel">
+    <h2>Read this before trusting any number</h2>
+    <ul class="warns" id="warns"></ul>
+  </section>
+</div>
+<script>
+const EMBED = /*BREEDER_DATA*/null;
+const FAM = { orb: "Opening range breakout", vwap_revert: "VWAP mean reversion", intraday_mom: "Intraday momentum", trend_pullback: "Trend pullback (time-series momentum)" };
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const famColor = f => css("--f-" + f) || "#888";
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const pct = x => x == null ? "-" : Math.round(x * 100) + "%";
+const r3 = x => x == null ? "-" : (x >= 0 ? "+" : "") + x.toFixed(3) + "R";
+const cls = x => x == null ? "" : x > 0 ? "pos" : x < 0 ? "neg" : "";
+
+async function load() {
+  if (EMBED) return EMBED;
+  try { const r = await fetch("latest.json", { cache: "no-store" }); if (r.ok) return await r.json(); } catch (e) {}
+  const m = location.hash.match(/token=([A-Za-z0-9_\-]+)/);
+  let token = m ? m[1] : null;
+  try { if (token) localStorage.setItem("tb.token", token); else token = localStorage.getItem("tb.token"); } catch (e) {}
+  const r = await fetch("/api/breeder", { headers: { "X-Token": token || "" }, cache: "no-store" });
+  if (!r.ok) throw new Error(r.status === 404 ? "No breeding run yet. Run `python -m tradebot breed` (or the Breed workflow) first." :
+                             r.status === 401 ? "Wrong or missing access token: open the link the dashboard prints." : "Server said " + r.status);
+  return r.json();
+}
+
+function ci95(w, n) {
+  if (!n) return [0, 1];
+  const z = 1.96, p = w / n, den = 1 + z * z / n, c = (p + z * z / (2 * n)) / den;
+  const h = z * Math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / den;
+  return [Math.max(0, c - h), Math.min(1, c + h)];
+}
+
+function splitCard(name, m, days, goal, hold) {
+  if (!m || !m.trades) return `<div class="split${hold ? " hold" : ""}"><span class="lab">${name}</span><span class="big">-</span><span class="note">no trades</span></div>`;
+  const [lo, hi] = ci95(m.wins, m.trades);
+  const wcls = m.win_rate >= goal ? "pos" : m.win_rate >= 0.5 ? "mid" : "neg";
+  return `<div class="split${hold ? " hold" : ""}">
+    <span class="lab">${name} · ${days.length} days</span>
+    <span class="big ${wcls}">${pct(m.win_rate)}</span>
+    <div class="meter" title="95% range ${pct(lo)}–${pct(hi)}; dashed line is the ${pct(goal)} goal">
+      <span class="ci" style="left:${lo * 100}%;width:${(hi - lo) * 100}%"></span>
+      <span class="goal" style="left:${goal * 100}%"></span>
+      <span class="pt" style="left:calc(${m.win_rate * 100}% - 1px)"></span></div>
+    <div class="row"><span>95% range</span><b>${pct(lo)}–${pct(hi)}</b></div>
+    <div class="row"><span>Trades</span><b>${m.trades} (${m.wins} wins)</b></div>
+    <div class="row"><span>Per trade</span><b class="${cls(m.exp_r)}">${r3(m.exp_r)}</b></div>
+    <div class="row"><span>Profit factor</span><b class="${m.pf > 1 ? "pos" : "neg"}">${m.pf.toFixed(2)}</b></div>
+    <div class="row"><span>Total</span><b class="${cls(m.total_r)}">${m.total_r >= 0 ? "+" : ""}${m.total_r.toFixed(1)}R · $${Math.round(m.total_usd).toLocaleString()}</b></div>
+    <div class="row"><span>Dates</span><b>${days[0]} → ${days[days.length - 1]}</b></div></div>`;
+}
+
+function evoChart(rep) {
+  const g = rep.generations, svg = $("#evo"), W = Math.max(640, g.length * 14 + 80), H = 230, L = 44, R = 12, T = 12, B = 30;
+  svg.setAttribute("width", W); svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const x = i => L + (W - L - R) * (g.length > 1 ? i / (g.length - 1) : 0), y = v => T + (H - T - B) * (1 - v);
+  const goal = rep.meta.options.target_win_rate;
+  let s = "";
+  for (const v of [0, .25, .5, .75, 1]) s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="${css("--line")}"/><text x="${L - 6}" y="${y(v) + 4}" fill="${css("--dim")}" font-size="10" text-anchor="end">${v * 100}%</text>`;
+  s += `<line x1="${L}" x2="${W - R}" y1="${y(goal)}" y2="${y(goal)}" stroke="${css("--gold")}" stroke-dasharray="5 4"/><text x="${W - R}" y="${y(goal) - 4}" fill="${css("--gold")}" font-size="10" text-anchor="end">${pct(goal)} goal</text>`;
+  // family share as stacked strips along the bottom band
+  const fams = rep.meta.families, bandH = 0.0;
+  const pts = (key) => g.map((d, i) => d[key] == null ? null : [x(i), y(d[key])]).filter(Boolean);
+  const path = p => p.map((q, i) => (i ? "L" : "M") + q[0].toFixed(1) + "," + q[1].toFixed(1)).join("");
+  const wr = pts("best_win_rate");
+  const pass = g.map((d, i) => [x(i), y(d.passing / (d.population ? d.population.length : rep.meta.options.population))]);
+  s += `<path d="${path(pass)}" fill="none" stroke="${css("--violet")}" stroke-width="1.5" opacity=".8"/>`;
+  if (wr.length) {
+    s += `<path d="${path(wr)} L${wr[wr.length - 1][0]},${y(0)} L${wr[0][0]},${y(0)}Z" fill="${css("--teal")}" opacity=".08"/>`;
+    s += `<path d="${path(wr)}" fill="none" stroke="${css("--teal")}" stroke-width="2"/>`;
+    const e = wr[wr.length - 1];
+    s += `<circle cx="${e[0]}" cy="${e[1]}" r="4" fill="${css("--teal")}"/>`;
+  }
+  const step = Math.max(1, Math.ceil(g.length / 12));
+  g.forEach((d, i) => { if (i % step === 0 || i === g.length - 1) s += `<text x="${x(i)}" y="${H - 10}" fill="${css("--dim")}" font-size="10" text-anchor="middle">${d.gen}</text>`; });
+  s += `<text x="${L}" y="${H - 0}" fill="${css("--dim")}" font-size="10">generation →</text>`;
+  svg.innerHTML = s;
+  $("#evo-legend").innerHTML = `<span><i style="background:${css("--teal")}"></i>best train win rate among bots that pass the money gates</span>
+    <span><i style="background:${css("--violet")}"></i>share of the population passing (positive expectancy, PF &gt; 1, enough trades)</span>
+    <span class="note">Train-day scores only. They always climb: that is the breeder fitting the past, not proof of an edge.</span>`;
+}
+
+let REP, BY = {}, MODE = "surv", SEL = null;
+function treeView() {
+  const rep = REP, lineSet = new Set(rep.lineage);
+  let shown = rep.bots.filter(b => MODE === "all" ? true : MODE === "line" ? lineSet.has(b.id)
+    : (b.children > 0 || b.alive_until > b.gen || b.finalist || lineSet.has(b.id) || b.gen === 0));
+  const gens = rep.generations.length, colW = MODE === "line" ? 46 : 24, rowH = MODE === "all" ? 5 : 9, L = 40, T = 22;
+  const byGen = {};
+  for (const b of shown) (byGen[b.gen] ||= []).push(b);
+  const famIdx = Object.fromEntries(rep.meta.families.map((f, i) => [f, i]));
+  const pos = {};
+  let maxRows = 1;
+  for (const [gen, list] of Object.entries(byGen)) {
+    list.sort((a, b) => famIdx[a.family] - famIdx[b.family] || b.fitness - a.fitness);
+    list.forEach((b, i) => pos[b.id] = [L + gen * colW, T + i * rowH + 6]);
+    maxRows = Math.max(maxRows, list.length);
+  }
+  const W = L + gens * colW + 20, H = T + maxRows * rowH + 20, svg = $("#tree");
+  svg.setAttribute("width", W); svg.setAttribute("height", H); svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const fmin = Math.min(...shown.map(b => b.fitness)), fmax = Math.max(...shown.map(b => b.fitness));
+  const norm = f => fmax > fmin ? (f - fmin) / (fmax - fmin) : 1;
+  let edges = "", life = "", nodes = "", heads = "";
+  for (let gidx = 0; gidx < gens; gidx += Math.max(1, Math.ceil(gens / 20)))
+    heads += `<text x="${L + gidx * colW}" y="12" fill="${css("--dim")}" font-size="9" text-anchor="middle">G${gidx}</text>`;
+  for (const b of shown) {
+    const [cx, cy] = pos[b.id];
+    if (b.alive_until > b.gen) life += `<line x1="${cx}" y1="${cy}" x2="${L + b.alive_until * colW}" y2="${cy}" stroke="${famColor(b.family)}" stroke-width="${lineSet.has(b.id) ? 3 : 2}" opacity="${lineSet.has(b.id) ? .9 : .35}"/>`;
+    for (const p of b.parents) {
+      if (!pos[p]) continue;
+      const [px, py] = pos[p], hot = lineSet.has(b.id) && lineSet.has(p);
+      const mx = (px + cx) / 2;
+      edges += `<path d="M${px},${py} C${mx},${py} ${mx},${cy} ${cx},${cy}" fill="none" stroke="${hot ? css("--gold") : famColor(b.family)}" stroke-width="${hot ? 2.2 : .6}" opacity="${hot ? .95 : .22}"/>`;
+    }
+  }
+  for (const b of shown) {
+    const [cx, cy] = pos[b.id], dead = b.children === 0 && b.alive_until === b.gen && !b.champion;
+    const r = (MODE === "all" ? 1.4 : 2.2) + norm(b.fitness) * (MODE === "all" ? 1.8 : 3.2);
+    const ring = b.champion ? `<circle cx="${cx}" cy="${cy}" r="${r + 4}" fill="none" stroke="${css("--gold")}" stroke-width="2"/>` :
+      lineSet.has(b.id) ? `<circle cx="${cx}" cy="${cy}" r="${r + 2}" fill="none" stroke="${css("--gold")}" stroke-width="1.2"/>` : "";
+    nodes += `${ring}<circle data-id="${b.id}" cx="${cx}" cy="${cy}" r="${r}" fill="${famColor(b.family)}" opacity="${dead ? .25 : b.passes ? 1 : .6}" style="cursor:pointer"><title>${b.id} · ${FAM[b.family]} · train ${pct(b.t.wr)} n=${b.t.n} ${r3(b.t.er)}</title></circle>`;
+    if (b.id === SEL) nodes += `<circle cx="${cx}" cy="${cy}" r="${r + 6}" fill="none" stroke="${css("--fg")}" stroke-width="1.5"/>`;
+  }
+  svg.innerHTML = heads + edges + life + nodes;
+  for (const [id, btn] of [["surv", "#show-surv"], ["all", "#show-all"], ["line", "#show-line"]]) $(btn).setAttribute("aria-pressed", MODE === id);
+}
+
+function mrow(name, m) {
+  if (!m || !m.trades) return `<dt>${name}</dt><dd>no trades</dd>`;
+  return `<dt>${name}</dt><dd>${pct(m.win_rate)} of ${m.trades}, <span class="${cls(m.exp_r)}">${r3(m.exp_r)}</span>, PF ${m.pf.toFixed(2)}</dd>`;
+}
+function showBot(id) {
+  SEL = id; const b = BY[id]; if (!b) return;
+  const tags = [b.champion && `<span class="tag gold">champion</span>`, b.finalist && `<span class="tag">finalist</span>`,
+    b.on_champion_line && !b.champion && `<span class="tag gold">ancestor</span>`, b.passes ? `<span class="tag">passes gates</span>` : `<span class="tag">fails gates</span>`].filter(Boolean).join("");
+  const born = b.how === "textbook" ? "Generation 0, textbook version" : b.how === "random" ? "Generation 0, random genes" :
+    `Generation ${b.gen}, by ${b.how} from ` + b.parents.map(p => `<button class="link" data-go="${p}">${p}</button>`).join(" × ");
+  const genes = b.genes ? Object.entries(b.genes).filter(([k]) => k !== "family").map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(Array.isArray(v) ? v.join(" ") : v)}</dd>`).join("") : "";
+  const kids = REP.bots.filter(x => x.parents.includes(id)).slice(0, 30);
+  $("#detail").innerHTML = `<h3 style="color:${famColor(b.family)}">${b.id}</h3>${tags}
+    <div class="about">${esc(b.about || FAM[b.family])}</div>
+    <div>${born}</div>
+    ${b.mutations && b.mutations.length ? `<div style="margin-top:6px;color:var(--dim)">Mutations at birth</div><ul>${b.mutations.map(m => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}
+    <dl>${mrow("Train", b.train || { trades: b.t.n, win_rate: b.t.wr, exp_r: b.t.er, pf: b.t.pf })}${b.validate ? mrow("Validate", b.validate) : ""}${b.holdout ? mrow("Holdout", b.holdout) : ""}
+      <dt>Fitness</dt><dd>${b.fitness.toFixed(3)}</dd><dt>Lived</dt><dd>G${b.gen}–G${b.alive_until}</dd><dt>Children</dt><dd>${b.children}</dd></dl>
+    ${kids.length ? `<div style="color:var(--dim)">Children</div><div>${kids.map(k => `<button class="link" data-go="${k.id}">${k.id}</button>`).join(" ")}</div>` : `<div class="note">Dead end: no children.</div>`}
+    ${genes ? `<div style="margin-top:8px;color:var(--dim)">Genes</div><dl>${genes}</dl>` : ""}`;
+  treeView();
+}
+
+function render(rep) {
+  REP = rep; BY = Object.fromEntries(rep.bots.map(b => [b.id, b]));
+  for (const f of rep.finalists) BY[f.id] = Object.assign(BY[f.id] || {}, f);
+  BY[rep.champion.id] = Object.assign(BY[rep.champion.id] || {}, rep.champion);
+  const m = rep.meta, d = m.days, c = rep.champion, goal = m.options.target_win_rate, v = rep.verdict;
+  $("#meta").textContent = `${m.source} ${m.interval}-min bars · ${m.symbols.map(s => s.replace("=F", "")).join(" ")} · ${m.sessions} sessions ${m.first_day} → ${m.last_day} · ${rep.bots.length} bots, ${rep.generations.length - 1} generations · run ${rep.created.slice(0, 16).replace("T", " ")} UTC`;
+  $("#headline").textContent = v.headline; $("#headline").className = "headline " + (v.reached ? "yes" : "no");
+  $("#splits").innerHTML = splitCard("Train (bred on)", c.train, d.train, goal) + splitCard("Validate (picked on)", c.validate, d.validate, goal) +
+    splitCard("Holdout (never seen)", c.holdout, d.holdout, goal, true);
+  $("#lines").innerHTML = [`Champion ${c.id}: ${c.about}`, ...v.lines].map(x => `<li>${esc(x)}</li>`).join("");
+  $("#fam-legend").innerHTML = m.families.map(f => `<span><i style="background:${famColor(f)}"></i>${FAM[f]}</span>`).join("");
+  evoChart(rep); treeView();
+  // bloodline
+  const line = rep.lineage.map(id => BY[id]).filter(Boolean).sort((a, b) => a.gen - b.gen);
+  $("#chain").innerHTML = line.map(b => `<div><button class="link" data-go="${b.id}">${b.id}</button><span><span style="color:${famColor(b.family)}">${FAM[b.family]}</span> · ${b.how}${b.mutations && b.mutations.length ? ": " + esc(b.mutations.join(", ")) : ""} · train ${pct(b.t.wr)} n=${b.t.n} <span class="${cls(b.t.er)}">${r3(b.t.er)}</span></span></div>`).join("");
+  // finalists
+  const mm = x => !x || !x.trades ? "<td>-</td><td>-</td><td>-</td>" : `<td>${pct(x.win_rate)}</td><td>${x.trades}</td><td class="${cls(x.exp_r)}">${r3(x.exp_r)}</td>`;
+  $("#finalists").innerHTML = `<tr><th>Bot</th><th class="l">Strategy</th><th>Train WR</th><th>n</th><th>R/trade</th><th>Val WR</th><th>n</th><th>R/trade</th><th>Holdout WR</th><th>n</th><th>R/trade</th></tr>` +
+    rep.finalists.map(f => `<tr class="${f.champion ? "champ" : ""}"><td><button class="link" data-go="${f.id}">${f.id}</button>${f.champion ? " ★" : ""}</td><td class="l" style="color:${famColor(f.family)}">${FAM[f.family]}</td>${mm(f.train)}${mm(f.validate)}${mm(f.holdout)}</tr>`).join("");
+  // seeds, null, textbook
+  let rows = `<tr><th>Run</th><th class="l">Strategy</th><th>Train WR</th><th>n</th><th>R/trade</th><th>Val WR</th><th>n</th><th>R/trade</th><th>Holdout WR</th><th>n</th><th>R/trade</th></tr>`;
+  for (const s of rep.seeds || []) rows += `<tr><td>Seed ${s.seed}${s.id === c.id ? " ★" : ""}</td><td class="l" style="color:${famColor(s.family)}">${FAM[s.family]}</td>${mm(s.train)}${mm(s.validate)}${mm(s.holdout)}</tr>`;
+  if (rep.null) { const n = rep.null.champion; rows += `<tr><td>Luck test</td><td class="l">scrambled prices: ${FAM[n.family]}</td>${mm(n.train)}${mm(n.validate)}${mm(n.holdout)}</tr>`; }
+  for (const t of rep.textbook || []) rows += `<tr><td>Textbook</td><td class="l" style="color:${famColor(t.family)}">${FAM[t.family]}</td>${mm(t.train)}${mm(t.validate)}${mm(t.holdout)}</tr>`;
+  $("#seeds").innerHTML = rows;
+  const tr = (c.trades && c.trades.holdout) || [];
+  $("#trades").innerHTML = tr.length ? `<tr><th class="l">Day</th><th class="l">Symbol</th><th class="l">Side</th><th>In</th><th>Out</th><th>Entry</th><th>Exit</th><th class="l">Exit reason</th><th>P&amp;L / contract</th><th>R</th></tr>` +
+    tr.map(t => `<tr><td class="l">${t.day}</td><td class="l">${t.symbol.replace("=F", "")}</td><td class="l">${t.dir}</td><td>${t.in}</td><td>${t.out}</td><td>${t.entry}</td><td>${t.exit}</td><td class="l">${t.reason}</td><td class="${cls(t.pnl)}">$${t.pnl.toFixed(2)}</td><td class="${cls(t.r)}">${t.r.toFixed(2)}</td></tr>`).join("")
+    : `<tr><td class="l empty">No holdout trades.</td></tr>`;
+  $("#warns").innerHTML = (m.warnings || []).map(w => `<li>${esc(w)}</li>`).join("");
+}
+
+document.addEventListener("click", e => {
+  const go = e.target.closest("[data-go]"), dot = e.target.closest("circle[data-id]");
+  if (go) showBot(go.dataset.go); else if (dot) showBot(dot.dataset.id);
+});
+$("#show-surv").onclick = () => { MODE = "surv"; treeView(); };
+$("#show-all").onclick = () => { MODE = "all"; treeView(); };
+$("#show-line").onclick = () => { MODE = "line"; treeView(); };
+load().then(render).catch(err => { $("#headline").textContent = err.message; $("#headline").className = "headline no"; });
+</script>
+</body>
+</html>
