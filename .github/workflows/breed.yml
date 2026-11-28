@@ -1,9 +1,19 @@
 name: Breed
 
 # Bot breeder: evolves futures day-trading bots on free Yahoo data, rules only.
-# No API keys, no Claude calls, no orders. Results: the job summary and the
-# "breeder-run" artifact (tree.html opens on its own in a browser).
+# No API keys, no Claude calls, no orders.
+#
+# Nightly (weekdays after the close) it also:
+#   - merges the day's Yahoo bars into a growing archive on the `breeder-data` branch, so the
+#     history grows past Yahoo's ~60-day window (the bred bots see more regimes over time);
+#   - updates the hall of fame (docs/breeder/hall_of_fame.json/.md): nominates tonight's best,
+#     re-scores every bot on all saved history, promotes the ones that hold up (forward days,
+#     2-tick costs, weeks, regimes, near-copy seeds) and retires the ones that stop working.
+# GitHub runs scheduled workflows only from the default branch (main), so the nightly run
+# starts once this file is merged there. Until then: Actions > Breed > Run workflow, or a push.
 on:
+  schedule:
+    - cron: "45 22 * * 1-5"  # 22:45 UTC = 5:45 pm New York in winter (6:45 pm in summer)
   workflow_dispatch:
     inputs:
       generations:
@@ -19,18 +29,22 @@ on:
         description: "Bar size in minutes: 5 (~60 days of data) or 1 (~30 days)"
         default: "5"
   push:
-    branches: [claude/project-thread-popur6]
+    branches: [claude/project-thread-popur6, claude/project-thread-x9gy7d]
     paths:
       - "tradebot/breeder/**"
       - ".github/workflows/breed.yml"
 
 permissions:
-  contents: write  # to save the latest run under docs/breeder/ for the dashboard
+  contents: write  # saves the run to docs/breeder/ and the bar archive to the breeder-data branch
+
+concurrency:
+  group: breed-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   breed:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -40,7 +54,19 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - name: Tests
         run: python -m pytest -q
-      - name: Breed (Yahoo futures data)
+      - name: Load the bar archive (breeder-data branch)
+        run: |
+          if git ls-remote --exit-code --heads origin breeder-data >/dev/null 2>&1; then
+            git fetch --depth 1 origin breeder-data
+            git worktree add --detach store FETCH_HEAD
+          else
+            git worktree add --detach store
+            git -C store checkout --orphan breeder-data-new
+            git -C store rm -rfq .
+          fi
+          mkdir -p store/history
+          ls -la store/history
+      - name: Breed (Yahoo futures data + archive) and update the hall of fame
         env:
           GENS: ${{ inputs.generations || '50' }}
           POP: ${{ inputs.population || '100' }}
@@ -49,12 +75,19 @@ jobs:
         run: |
           set -o pipefail
           python -m tradebot breed --source yahoo --interval "$INTERVAL" --generations "$GENS" \
-            --population "$POP" --seeds "$SEEDS" --out breeder_runs 2> >(tee breed.log >&2)
+            --population "$POP" --seeds "$SEEDS" --out breeder_runs \
+            --archive store/history --hall-of-fame docs/breeder/hall_of_fame.json 2> >(tee breed.log >&2)
+      - name: Export the top bots for NinjaTrader (ninjatrader/export/bots.txt)
+        if: success()
+        run: python -m tradebot paper export --top 3 --dir ninjatrader/export | tee export.txt
       - name: Job summary
         if: always()
         run: |
           {
             cat breeder_runs/summary.md 2>/dev/null || echo "## Breed: no summary (see log)"
+            echo
+            cat docs/breeder/hall_of_fame.md 2>/dev/null || true
+            echo; echo '### Exported for NinjaTrader'; echo '```'; cat export.txt 2>/dev/null; echo '```'
             echo '<details><summary>log</summary>'
             echo
             echo '```'
@@ -62,7 +95,17 @@ jobs:
             echo '```'
             echo '</details>'
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Save the run to docs/breeder (the dashboard's /breeder page reads it)
+      - name: Save the bar archive to the breeder-data branch
+        if: success()
+        run: |
+          cd store
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf '# Bar archive\n\nYahoo futures bars saved nightly by the Breed workflow, so the breeder sees more than\nYahoo'"'"'s ~60 days. Data branch only: no code.\n' > README.md
+          git add history README.md
+          git commit -qm "Bar archive $(date -u +%Y-%m-%d) [skip ci]" || exit 0
+          for i in 1 2 3 4; do git push origin HEAD:refs/heads/breeder-data && break || sleep $((i * 10)); done
+      - name: Save the run and hall of fame to docs/breeder (the dashboard's /breeder page reads it)
         if: success()
         continue-on-error: true
         run: |
@@ -70,7 +113,7 @@ jobs:
           cp breeder_runs/latest.json breeder_runs/summary.md breeder_runs/tree.html docs/breeder/
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/breeder
+          git add docs/breeder ninjatrader/export
           git commit -m "Breeder run $(date -u +%Y-%m-%dT%H:%MZ) [skip ci]" || exit 0
           git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME"
       - uses: actions/upload-artifact@v4
@@ -79,5 +122,6 @@ jobs:
           name: breeder-run
           path: |
             breeder_runs/
+            docs/breeder/hall_of_fame.*
             breed.log
           if-no-files-found: warn

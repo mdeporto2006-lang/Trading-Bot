@@ -1,0 +1,190 @@
+# Bred bots for NinjaTrader's BredBot strategy. Written by: python -m tradebot paper export
+# 2026-11-28 04:24 UTC. SIM ACCOUNTS ONLY. One contract per trade.
+
+[general]
+interval=5
+bot_daily_loss_usd=250.0
+all_bots_daily_loss_usd=600.0
+max_open_positions=6
+max_trades_all_bots=40
+
+[bot B1]
+rank=1
+id=G42-3795
+key=43192f0dd2e6
+status=candidate
+about=10-min opening range breakout, 0 tick buffer; 0.18 ATR stop, 1.25R target; breakeven at 0.75R, trail 1.0R after 1.5R, time stop 12 bars; 6E CL ES YM
+backtest=trades 69, win rate 66.67%, +0.304R a trade
+gene.breakeven_r=0.75
+gene.dev_k=3.2
+gene.direction=both
+gene.entry_end_min=30
+gene.entry_start_min=70
+gene.family=orb
+gene.flatten_before_min=40
+gene.max_trades_day=1
+gene.mom_from=prev_close
+gene.mom_threshold_atr=0.2
+gene.mom_window_min=30
+gene.or_max_atr=0.95
+gene.or_min_atr=0.2
+gene.or_minutes=10
+gene.orb_buffer_ticks=0
+gene.pull_above_bars=3
+gene.pull_touch_atr=0.1
+gene.stop_atr=0.18
+gene.stop_mode=atr
+gene.target_mode=vwap
+gene.target_r=1.25
+gene.time_stop_bars=12
+gene.trail_after_r=1.5
+gene.trail_dist_r=1.0
+gene.trend_filter=off
+gene.trend_lookback=20
+gene.vwap_confirm=false
+gene.vwap_min_bars=12
+gene.symbols=6E=F,CL=F,ES=F,YM=F
+
+[bot B2]
+rank=2
+id=G39-3596
+key=df98e22fc9b2
+status=candidate
+about=follow the first 90 min move (from open) if > 0.04 ATR; 0.22 ATR stop, 2.25R target; short only, with 5d trend, breakeven at 0.75R, trail 2.0R after 1.0R, time stop 6 bars; 6E ES GC NQ RTY
+backtest=trades 79, win rate 63.29%, +0.191R a trade
+gene.breakeven_r=0.75
+gene.dev_k=2.8
+gene.direction=short
+gene.entry_end_min=30
+gene.entry_start_min=85
+gene.family=intraday_mom
+gene.flatten_before_min=45
+gene.max_trades_day=3
+gene.mom_from=open
+gene.mom_threshold_atr=0.04
+gene.mom_window_min=90
+gene.or_max_atr=0.7
+gene.or_min_atr=0.0
+gene.or_minutes=30
+gene.orb_buffer_ticks=3
+gene.pull_above_bars=3
+gene.pull_touch_atr=0.06
+gene.stop_atr=0.22
+gene.stop_mode=atr
+gene.target_mode=r
+gene.target_r=2.25
+gene.time_stop_bars=6
+gene.trail_after_r=1.0
+gene.trail_dist_r=2.0
+gene.trend_filter=with
+gene.trend_lookback=5
+gene.vwap_confirm=false
+gene.vwap_min_bars=21
+gene.symbols=6E=F,ES=F,GC=F,NQ=F,RTY=F
+
+[bot B3]
+rank=3
+id=G50-4550
+key=18bea3562db3
+status=candidate
+about=follow the first 15 min move (from open) if > 0.12 ATR; 0.14 ATR stop, 2.25R target; against 60d trend, breakeven at 1.0R, trail 0.5R after 1.5R, time stop 3 bars; 6E CL GC NQ YM
+backtest=trades 66, win rate 60.61%, +0.089R a trade
+gene.breakeven_r=1.0
+gene.dev_k=1.2
+gene.direction=both
+gene.entry_end_min=205
+gene.entry_start_min=85
+gene.family=intraday_mom
+gene.flatten_before_min=35
+gene.max_trades_day=3
+gene.mom_from=open
+gene.mom_threshold_atr=0.12
+gene.mom_window_min=15
+gene.or_max_atr=0.4
+gene.or_min_atr=0.04
+gene.or_minutes=10
+gene.orb_buffer_ticks=8
+gene.pull_above_bars=7
+gene.pull_touch_atr=0.05
+gene.stop_atr=0.14
+gene.stop_mode=atr
+gene.target_mode=r
+gene.target_r=2.25
+gene.time_stop_bars=3
+gene.trail_after_r=1.5
+gene.trail_dist_r=0.5
+gene.trend_filter=against
+gene.trend_lookback=60
+gene.vwap_confirm=true
+gene.vwap_min_bars=3
+gene.symbols=6E=F,CL=F,GC=F,NQ=F,YM=F
+
+[symbol 6E=F]
+nt_root=M6E
+name=Euro FX
+tick=0.0001
+multiplier=12500.0
+commission_rt=1.0
+open_min=500
+close_min=900
+session_et=08:20-15:00
+
+[symbol CL=F]
+nt_root=MCL
+name=WTI crude oil
+tick=0.01
+multiplier=100.0
+commission_rt=1.5
+open_min=540
+close_min=870
+session_et=09:00-14:30
+
+[symbol ES=F]
+nt_root=MES
+name=S&P 500 E-mini
+tick=0.25
+multiplier=5.0
+commission_rt=1.5
+open_min=570
+close_min=960
+session_et=09:30-16:00
+
+[symbol GC=F]
+nt_root=MGC
+name=Gold
+tick=0.1
+multiplier=10.0
+commission_rt=1.5
+open_min=500
+close_min=810
+session_et=08:20-13:30
+
+[symbol NQ=F]
+nt_root=MNQ
+name=Nasdaq-100 E-mini
+tick=0.25
+multiplier=2.0
+commission_rt=1.5
+open_min=570
+close_min=960
+session_et=09:30-16:00
+
+[symbol RTY=F]
+nt_root=M2K
+name=Russell 2000 E-mini
+tick=0.1
+multiplier=5.0
+commission_rt=1.5
+open_min=570
+close_min=960
+session_et=09:30-16:00
+
+[symbol YM=F]
+nt_root=MYM
+name=Dow E-mini
+tick=1.0
+multiplier=0.5
+commission_rt=1.5
+open_min=570
+close_min=960
+session_et=09:30-16:00

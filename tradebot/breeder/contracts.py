@@ -47,6 +47,11 @@ CONTRACTS: dict[str, Contract] = {c.symbol: c for c in [
 
 UNIVERSE: list[str] = list(CONTRACTS)
 
+# The NinjaTrader instrument root each bred symbol is paper traded as (one contract, micro where
+# one exists). The multipliers above are for these, so the bot's dollar P&L matches the backtest.
+NT_ROOT: dict[str, str] = {"ES=F": "MES", "NQ=F": "MNQ", "YM=F": "MYM", "RTY=F": "M2K", "CL=F": "MCL",
+                           "GC=F": "MGC", "ZN=F": "ZN", "6E=F": "M6E"}
+
 
 def hhmm(s: str) -> int:
     h, m = s.split(":")
