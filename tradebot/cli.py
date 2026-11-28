@@ -93,11 +93,11 @@ def main(argv: list[str] | None = None) -> None:
         cfg = store.layer(base_cfg)  # adopted self-improvements on top of config.yaml
     except TuningError as e:
         sys.exit(f"tuning/active.yaml is invalid ({e}); fix it or run `rollback --to 0`")
-    if args.cmd == "backtest":  # never places orders, in any mode
-        run_backtest(args, cfg)
-        return
-    if args.cmd == "timemachine":
-        run_timemachine(args, cfg)
+    if args.cmd in ("backtest", "timemachine"):  # never place orders, in any mode
+        try:
+            (run_backtest if args.cmd == "backtest" else run_timemachine)(args, cfg)
+        except RuntimeError as e:  # data source trouble: say what happened, no traceback
+            sys.exit(f"{args.cmd} stopped: {e}")
         return
     try:
         assert_mode_allowed(cfg)

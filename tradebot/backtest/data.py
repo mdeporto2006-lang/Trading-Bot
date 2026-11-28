@@ -153,25 +153,100 @@ class YahooHistory:
     name = "yahoo"
     has_news = False
     has_quotes = False
-    URL = "https://query1.finance.yahoo.com/v8/finance/chart/{t}"
+    HOSTS = ("query1.finance.yahoo.com", "query2.finance.yahoo.com")
+    PATH = "/v8/finance/chart/{t}"
+    USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+    MIN_INTERVAL = 0.8  # seconds between requests, to stay under Yahoo's rate limit
+    MAX_TRIES = 7
 
-    def __init__(self, session=None):
-        import requests
-
-        self.http = session or requests.Session()
-        self.http.headers.setdefault("User-Agent", "Mozilla/5.0 (tradebot backtest)")
+    def __init__(self, session=None, sleep=_time.sleep, clock=_time.monotonic):
+        self.http = session or self._new_session()
+        self.http.headers.update({
+            "User-Agent": self.USER_AGENT,
+            "Accept": "application/json,text/plain,*/*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Origin": "https://finance.yahoo.com",
+            "Referer": "https://finance.yahoo.com/",
+        })
+        self._sleep, self._clock = sleep, clock
+        self._last = 0.0
+        self._crumb: str | None = None
+        self._crumb_tried = False
         self._minute_cache: dict[tuple[str, date], list[MinuteRow]] = {}
 
+    @staticmethod
+    def _new_session():
+        # curl_cffi (if installed) looks like a real Chrome to Yahoo, which helps on
+        # cloud machines (Codespaces, CI) that Yahoo throttles hard. Optional.
+        try:
+            from curl_cffi import requests as cffi
+
+            return cffi.Session(impersonate="chrome")
+        except Exception:
+            import requests
+
+            return requests.Session()
+
+    def _pace(self) -> None:
+        wait = self.MIN_INTERVAL - (self._clock() - self._last)
+        if wait > 0:
+            self._sleep(wait)
+        self._last = self._clock()
+
+    def _ensure_crumb(self) -> None:
+        """Yahoo sometimes wants a session cookie + crumb. Best effort: get them once."""
+        if self._crumb_tried:
+            return
+        self._crumb_tried = True
+        try:
+            self._pace()
+            self.http.get("https://fc.yahoo.com", timeout=15, allow_redirects=True)
+            self._pace()
+            r = self.http.get(f"https://{self.HOSTS[1]}/v1/test/getcrumb", timeout=15)
+            text = (r.text or "").strip()
+            if r.status_code == 200 and text and "<" not in text and len(text) < 64:
+                self._crumb = text
+        except Exception as e:  # no crumb is fine; most requests work without
+            log.debug("yahoo crumb fetch failed: %s", e)
+
     def _get(self, ticker: str, params: dict) -> dict:
-        for attempt in range(4):
-            r = self.http.get(self.URL.format(t=ticker), params=params, timeout=30)
-            if r.status_code == 429:
-                _time.sleep(2 ** attempt)
+        last_err = ""
+        for attempt in range(self.MAX_TRIES):
+            host = self.HOSTS[attempt % len(self.HOSTS)]  # alternate query1 / query2
+            q = dict(params)
+            if self._crumb:
+                q["crumb"] = self._crumb
+            self._pace()
+            try:
+                r = self.http.get(f"https://{host}{self.PATH.format(t=ticker)}", params=q, timeout=30)
+            except Exception as e:
+                last_err = f"{type(e).__name__}: {e}"
+                self._sleep(min(30, 2 ** attempt))
                 continue
-            r.raise_for_status()
-            res = (r.json().get("chart") or {}).get("result") or []
-            return res[0] if res else {}
-        raise RuntimeError(f"Yahoo rate-limited {ticker}")
+            if r.status_code == 200:
+                res = (r.json().get("chart") or {}).get("result") or []
+                return res[0] if res else {}
+            last_err = f"HTTP {r.status_code} from {host}"
+            if r.status_code in (401, 403):
+                self._ensure_crumb()  # then retry with cookie + crumb
+            elif r.status_code == 404:
+                raise RuntimeError(f"Yahoo has no data for {ticker} ({last_err})")
+            if r.status_code == 429 or r.status_code >= 500 or r.status_code in (401, 403):
+                retry_after = r.headers.get("Retry-After")
+                delay = float(retry_after) if retry_after and retry_after.isdigit() else min(60, 2 ** (attempt + 1))
+                if attempt == 1:
+                    self._ensure_crumb()  # a cookie session often clears a 429 wall
+                log.info("Yahoo %s for %s, waiting %.0fs (try %d/%d)", last_err, ticker, delay,
+                         attempt + 1, self.MAX_TRIES)
+                self._sleep(delay + random.random())
+                continue
+            raise RuntimeError(f"Yahoo request for {ticker} failed: {last_err}")
+        raise RuntimeError(
+            f"Yahoo kept refusing requests for {ticker} ({last_err}) after {self.MAX_TRIES} tries. "
+            "Yahoo throttles some cloud machines hard. Try: `pip install curl_cffi` and re-run, "
+            "wait a few minutes, or use free Alpaca paper keys (see README > Backtesting)."
+        )
 
     @staticmethod
     def parse(result: dict) -> list[tuple[datetime, Bar]]:

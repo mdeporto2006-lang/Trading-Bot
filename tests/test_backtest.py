@@ -230,3 +230,46 @@ def test_cli_backtest_synthetic(tmp_path, monkeypatch, capsys):
     assert "SYNTHETIC DATA" in out and (tmp_path / "backtests" / "latest.json").exists()
     main(["backtest", "AAA", "--source", "synthetic", "--start", "2026-11-16", "--end", "2026-11-17", "--estimate"])
     assert "Claude planner estimate" in capsys.readouterr().err
+
+
+class _Resp:
+    def __init__(self, status, payload=None, headers=None, text=""):
+        self.status_code, self._p, self.headers, self.text = status, payload or {}, headers or {}, text
+
+    def json(self):
+        return self._p
+
+
+class _FakeHTTP:
+    def __init__(self, statuses):
+        self.statuses = list(statuses)
+        self.headers = {}
+        self.urls = []
+
+    def get(self, url, params=None, timeout=None, allow_redirects=True):
+        self.urls.append(url)
+        if "fc.yahoo.com" in url:
+            return _Resp(404)
+        if "getcrumb" in url:
+            return _Resp(200, text="abc123")
+        st = self.statuses.pop(0)
+        ok = {"chart": {"result": [{"timestamp": [1763476200], "indicators": {"quote": [
+            {"open": [1.0], "high": [1.1], "low": [0.9], "close": [1.05], "volume": [10]}]}}]}}
+        return _Resp(st, ok if st == 200 else {})
+
+
+def test_yahoo_retries_429_and_alternates_hosts():
+    http = _FakeHTTP([429, 429, 200])
+    y = YahooHistory(session=http, sleep=lambda s: None)
+    rows = y.daily("AAPL", date(2026, 11, 17), date(2026, 11, 18))
+    assert len(rows) == 1
+    chart = [u for u in http.urls if "/v8/finance/chart/" in u]
+    assert chart[0].startswith("https://query1.") and chart[1].startswith("https://query2.")
+    assert http.headers["User-Agent"].startswith("Mozilla/5.0 (Windows")
+    assert y._crumb == "abc123"  # picked up a cookie + crumb after repeated 429s
+
+
+def test_yahoo_gives_up_with_clear_message():
+    y = YahooHistory(session=_FakeHTTP([429] * 10), sleep=lambda s: None)
+    with pytest.raises(RuntimeError, match="Alpaca"):
+        y.daily("AAPL", date(2026, 11, 17), date(2026, 11, 18))
