@@ -300,9 +300,56 @@ and the dashboard shows them at `/breeder`: the verdict, the evolution chart,
 the family tree (click any bot for its genes, parents, mutations and scores),
 the champion's bloodline, finalists and holdout trades.
 
-Alpaca doesn't trade futures. Trading a bred bot live would need a futures
-broker (for example Interactive Brokers, Tradovate or NinjaTrader), and it
-should be paper traded first.
+### Nightly breeding and the hall of fame
+
+The Breed workflow also runs every weekday evening (once it's on `main`; GitHub only schedules
+workflows from the default branch). Each night it:
+
+1. merges the day's Yahoo bars into an archive on the `breeder-data` branch (`--archive`), so
+   history keeps growing past Yahoo's ~60 days, for free;
+2. breeds as above;
+3. updates the **hall of fame** (`docs/breeder/hall_of_fame.json` and `.md`, `--hall-of-fame`).
+   It nominates each seed's champion and the finalists that also made money on validate and
+   holdout days. Then it re-scores every bot on all the saved history and keeps its results day
+   by day.
+
+A bot is **promoted** only when it passes every check:
+- **forward:** 20+ trades on days after its nomination, above 0R and PF 1.1;
+- **record:** 40+ trades at +0.05R or better;
+- **costs:** still positive with 2-tick slippage;
+- **weeks:** 60% of 4+ weeks not losing;
+- **regimes:** positive in S&P up and down trends and in high and low volatility, wherever it has
+  8+ trades;
+- **seeds:** 6 of 8 near-copies (genes nudged one step, seeds 1–8) still positive.
+
+Promoted bots that stop working are retired. The rules are in `tradebot/breeder/halloffame.py`.
+
+4. exports the top distinct bots for NinjaTrader to `ninjatrader/export/bots.txt`.
+
+## Paper trading on NinjaTrader / Tradovate demo
+
+Alpaca doesn't trade futures. The bred bots paper trade inside **NinjaTrader 8 Desktop** on a free
+Tradovate/NinjaTrader **demo** account, as the NinjaScript strategy `ninjatrader/BredBot.cs`.
+Setup steps: **[docs/ninjatrader/SETUP.md](docs/ninjatrader/SETUP.md)**.
+
+- **Same logic as the backtest.** `ninjatrader/BredBotCore.cs` is a port of `breeder/sim.py`. CI
+  replays 400+ bots through both and requires identical trades. It also drives the whole strategy
+  against a fake broker (`.github/workflows/ninjatrader.yml`).
+- **Paper only.** The strategy refuses any account not named `DEMO…`, `Sim…` or `Playback…`.
+- **One contract a trade.** Daily loss limits apply per bot and for all bots, plus a cap on open
+  positions and on trades a day.
+- **Kill switch:** a `KILL` file in `Documents\NinjaTrader 8\tradebot\` flattens everything
+  within about 2 seconds.
+- **No API keys.** The Tradovate API would need a funded live account, a $25/month add-on and a
+  CME data license.
+
+```bash
+python -m tradebot paper export     # top hall-of-fame bots -> bots.txt (the workflow does this nightly)
+python -m tradebot paper install    # copy the strategy into Documents\NinjaTrader 8\bin\Custom\Strategies
+python -m tradebot paper status     # today's paper trades and events
+python -m tradebot paper compare    # paper vs backtest: R per trade vs its expected range, trade-by-trade match
+python -m tradebot paper kill       # kill switch on (paper resume to remove)
+```
 
 ## Self-improvement
 

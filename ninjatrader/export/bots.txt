@@ -1,0 +1,96 @@
+# Bred bots for NinjaTrader's BredBot strategy. Written by: python -m tradebot paper export
+# 2026-11-28 04:21 UTC. SIM ACCOUNTS ONLY. One contract per trade.
+
+[general]
+interval=5
+bot_daily_loss_usd=250.0
+all_bots_daily_loss_usd=600.0
+max_open_positions=6
+max_trades_all_bots=40
+
+[bot B1]
+rank=1
+id=G48-4395
+key=41475ecbbc3f
+status=candidate (not yet in the hall of fame)
+about=follow the first 45 min move (from prev close) if > 0.2 ATR; 0.2 ATR stop, 0.5R target; with 60d trend, breakeven at 1.0R, trail 2.0R after 0.5R; CL ES NQ RTY YM
+backtest=trades 22, win rate 81.82%, +0.213R a trade
+gene.breakeven_r=1.0
+gene.dev_k=1.1
+gene.direction=both
+gene.entry_end_min=60
+gene.entry_start_min=0
+gene.family=intraday_mom
+gene.flatten_before_min=10
+gene.max_trades_day=2
+gene.mom_from=prev_close
+gene.mom_threshold_atr=0.2
+gene.mom_window_min=45
+gene.or_max_atr=0.65
+gene.or_min_atr=0.02
+gene.or_minutes=30
+gene.orb_buffer_ticks=3
+gene.pull_above_bars=9
+gene.pull_touch_atr=0.07
+gene.stop_atr=0.2
+gene.stop_mode=atr
+gene.target_mode=vwap
+gene.target_r=0.5
+gene.time_stop_bars=0
+gene.trail_after_r=0.5
+gene.trail_dist_r=2.0
+gene.trend_filter=with
+gene.trend_lookback=60
+gene.vwap_confirm=true
+gene.vwap_min_bars=6
+gene.symbols=CL=F,ES=F,NQ=F,RTY=F,YM=F
+
+[symbol CL=F]
+nt_root=MCL
+name=WTI crude oil
+tick=0.01
+multiplier=100.0
+commission_rt=1.5
+open_min=540
+close_min=870
+session_et=09:00-14:30
+
+[symbol ES=F]
+nt_root=MES
+name=S&P 500 E-mini
+tick=0.25
+multiplier=5.0
+commission_rt=1.5
+open_min=570
+close_min=960
+session_et=09:30-16:00
+
+[symbol NQ=F]
+nt_root=MNQ
+name=Nasdaq-100 E-mini
+tick=0.25
+multiplier=2.0
+commission_rt=1.5
+open_min=570
+close_min=960
+session_et=09:30-16:00
+
+[symbol RTY=F]
+nt_root=M2K
+name=Russell 2000 E-mini
+tick=0.1
+multiplier=5.0
+commission_rt=1.5
+open_min=570
+close_min=960
+session_et=09:30-16:00
+
+[symbol YM=F]
+nt_root=MYM
+name=Dow E-mini
+tick=1.0
+multiplier=0.5
+commission_rt=1.5
+open_min=570
+close_min=960
+session_et=09:30-16:00

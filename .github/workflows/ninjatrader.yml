@@ -1,0 +1,65 @@
+name: NinjaTrader bot checks
+
+# Checks the NinjaTrader paper-trading strategy (ninjatrader/*.cs) without NinjaTrader:
+#   1. compiles it as C# 6 against stand-ins for the NinjaTrader API (catches typos and syntax
+#      NinjaTrader 8 rejects; the final word is still NinjaTrader's own compiler);
+#   2. parity: the C# decision code makes exactly the same trades as the Python backtest, on
+#      synthetic prices and on real Yahoo bars;
+#   3. drives the full strategy through sessions against a fake broker: trades match, only
+#      Sim/DEMO accounts trade, the kill switch flattens, loss limits halt, rejected stops flatten.
+on:
+  push:
+    branches: [claude/project-thread-x9gy7d]
+    paths:
+      - "ninjatrader/**"
+      - "tools/**"
+      - "tradebot/breeder/**"
+      - "tradebot/paper/**"
+      - ".github/workflows/ninjatrader.yml"
+  pull_request:
+    paths:
+      - "ninjatrader/**"
+      - "tools/**"
+      - "tradebot/breeder/**"
+      - "tradebot/paper/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Python tests
+        run: python -m pytest -q
+      - name: Install Mono (C# compiler)
+        run: sudo apt-get update -q && sudo apt-get install -y -q mono-mcs mono-runtime
+      - name: Compile the strategy (C# 6, NinjaTrader stand-ins)
+        run: |
+          mcs -langversion:6 -warnaserror+ -target:library -out:bredbot.dll \
+            tools/ninjastub/*.cs ninjatrader/BredBot.cs ninjatrader/BredBotCore.cs
+      - name: Parity with the Python backtest (synthetic prices)
+        run: |
+          mcs -langversion:6 -warnaserror+ -out:parity.exe tools/parity/Program.cs ninjatrader/BredBotCore.cs
+          python tools/parity/dump.py parity_in.json
+          mono parity.exe parity_in.json parity_out.json parity_in.bots.txt
+          python tools/parity/compare.py parity_in.json parity_out.json
+      - name: Parity with the Python backtest (real Yahoo bars)
+        continue-on-error: true  # Yahoo sometimes refuses cloud machines
+        run: |
+          python tools/parity/dump.py parity_y.json yahoo
+          mono parity.exe parity_y.json parity_y_out.json parity_y.bots.txt
+          python tools/parity/compare.py parity_y.json parity_y_out.json
+      - name: Strategy vs fake broker (trades, accounts, kill switch, loss limits)
+        run: |
+          mcs -langversion:6 -warnaserror+ -main:WrapperTest.Program -out:wt.exe tools/ninjastub/*.cs \
+            tools/ninjastub/test/*.cs tools/parity/Program.cs ninjatrader/BredBot.cs ninjatrader/BredBotCore.cs
+          mono wt.exe parity_in.json parity_in.bots.txt

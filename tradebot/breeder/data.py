@@ -100,8 +100,36 @@ def build_sessions(symbol: str, intraday: list[tuple[int, float, float, float, f
 # ---------------------------------------------------------------------------
 # Yahoo
 # ---------------------------------------------------------------------------
-def fetch_yahoo(symbols: list[str], interval: int, cache_dir: str | Path) -> dict[str, list[Session]]:
-    """5m bars: range 60d. 1m bars: range 30d is refused, so ask for 7-day windows."""
+def _in_window(symbol: str, ts: int, interval: int) -> bool:
+    spec = CONTRACTS[symbol]
+    w_open, w_close = hhmm(spec.session_et[0]), hhmm(spec.session_et[1])
+    et = datetime.fromtimestamp(ts, timezone.utc).astimezone(ET)
+    m = et.hour * 60 + et.minute
+    return w_open <= m and m + interval <= w_close
+
+
+def merge_archive(symbol: str, interval: int, raw: dict, archive_dir: str | Path) -> dict:
+    """Grow the bar history past Yahoo's ~60-day limit: merge this fetch into an archive file
+    (one per symbol and bar size) and return everything archived. Newer data wins where they
+    overlap. Only bars inside the trading window are kept, which keeps the files small."""
+    path = Path(archive_dir) / f"{symbol.replace('=', '_')}_{interval}m.json"
+    old = json.loads(path.read_text()) if path.exists() else {"intraday": [], "daily": []}
+    intra = {int(r[0]): list(r) for r in old.get("intraday", [])}
+    intra.update({int(r[0]): list(r) for r in raw.get("intraday", [])})
+    daily = {r[0]: list(r) for r in old.get("daily", [])}
+    daily.update({r[0]: list(r) for r in raw.get("daily", [])})
+    merged = {"symbol": symbol, "interval": interval,
+              "intraday": [intra[k] for k in sorted(intra) if _in_window(symbol, k, interval)],
+              "daily": [daily[k] for k in sorted(daily)]}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(merged, separators=(",", ":")))
+    return merged
+
+
+def fetch_yahoo(symbols: list[str], interval: int, cache_dir: str | Path,
+                archive_dir: str | Path | None = None) -> dict[str, list[Session]]:
+    """5m bars: range 60d. 1m bars: range 30d is refused, so ask for 7-day windows.
+    With archive_dir, each fetch is merged into a growing archive and sessions come from all of it."""
     from ..backtest.data import YahooHistory
 
     cache = Path(cache_dir)
@@ -134,6 +162,10 @@ def fetch_yahoo(symbols: list[str], interval: int, cache_dir: str | Path) -> dic
             daily = [(ts.astimezone(ET).date().isoformat(), b.open, b.high, b.low, b.close) for ts, b in y.parse(res)]
             raw = {"intraday": sorted(set(map(tuple, intra))), "daily": daily}
             path.write_text(json.dumps(raw))
+        if archive_dir is not None:
+            n0 = len(raw["intraday"])
+            raw = merge_archive(sym, interval, raw, archive_dir)
+            log.info("%s: archive now holds %d bars (this fetch %d)", sym, len(raw["intraday"]), n0)
         daily = [(date.fromisoformat(d), o, h, l, c) for d, o, h, l, c in raw["daily"]]
         out[sym] = build_sessions(sym, [tuple(r) for r in raw["intraday"]], daily, interval)
         log.info("%s: %d sessions of %dm bars", sym, len(out[sym]), interval)

@@ -1,0 +1,76 @@
+{
+ "exported": "2026-11-28T04:21:00.086554+00:00",
+ "interval": 5,
+ "risk": {
+  "bot_daily_loss_usd": 250.0,
+  "all_bots_daily_loss_usd": 600.0,
+  "max_open_positions": 6,
+  "max_trades_all_bots": 40
+ },
+ "bots": {
+  "B1": {
+   "id": "G48-4395",
+   "key": "41475ecbbc3f",
+   "status": "candidate (not yet in the hall of fame)",
+   "genes": {
+    "family": "intraday_mom",
+    "direction": "both",
+    "trend_filter": "with",
+    "trend_lookback": 60,
+    "entry_start_min": 0,
+    "entry_end_min": 60,
+    "flatten_before_min": 10,
+    "max_trades_day": 2,
+    "stop_mode": "atr",
+    "stop_atr": 0.2,
+    "target_mode": "vwap",
+    "target_r": 0.5,
+    "breakeven_r": 1.0,
+    "trail_after_r": 0.5,
+    "trail_dist_r": 2.0,
+    "time_stop_bars": 0,
+    "or_minutes": 30,
+    "orb_buffer_ticks": 3,
+    "or_min_atr": 0.02,
+    "or_max_atr": 0.65,
+    "dev_k": 1.1,
+    "vwap_confirm": true,
+    "vwap_min_bars": 6,
+    "mom_window_min": 45,
+    "mom_threshold_atr": 0.2,
+    "mom_from": "prev_close",
+    "pull_touch_atr": 0.07,
+    "pull_above_bars": 9,
+    "symbols": [
+     "CL=F",
+     "ES=F",
+     "NQ=F",
+     "RTY=F",
+     "YM=F"
+    ]
+   },
+   "about": "follow the first 45 min move (from prev close) if > 0.2 ATR; 0.2 ATR stop, 0.5R target; with 60d trend, breakeven at 1.0R, trail 2.0R after 0.5R; CL ES NQ RTY YM",
+   "expect": {
+    "trades": 22,
+    "wins": 18,
+    "win_rate": 0.8182,
+    "exp_r": 0.2134,
+    "exp_usd": 45.0227,
+    "pf": 2.1514,
+    "total_usd": 990.4997,
+    "total_r": 4.6946,
+    "max_dd_r": 3.1009,
+    "avg_win_r": 0.4873,
+    "avg_loss_r": -1.0193,
+    "days_traded": 10,
+    "exits": {
+     "target": 18,
+     "stop": 4
+    }
+   },
+   "forward": null,
+   "r_list": [],
+   "checks": {}
+  }
+ }
+}
