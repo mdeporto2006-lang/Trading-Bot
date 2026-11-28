@@ -64,6 +64,12 @@
      "data_to": "2026-11-25",
      "seed": 1,
      "id": "G42-3795"
+    },
+    {
+     "night": "2026-11-28",
+     "data_to": "2026-11-25",
+     "seed": 1,
+     "id": "G42-3795"
     }
    ],
    "days": {
@@ -972,6 +978,12 @@
      "data_to": "2026-11-25",
      "seed": 2,
      "id": "G50-4550"
+    },
+    {
+     "night": "2026-11-28",
+     "data_to": "2026-11-25",
+     "seed": 2,
+     "id": "G50-4550"
     }
    ],
    "days": {
@@ -1837,6 +1849,12 @@
    "first_nominated": "2026-11-25",
    "status": "candidate",
    "nominations": [
+    {
+     "night": "2026-11-28",
+     "data_to": "2026-11-25",
+     "seed": 3,
+     "id": "G39-3596"
+    },
     {
      "night": "2026-11-28",
      "data_to": "2026-11-25",
@@ -2975,6 +2993,14 @@
    "data_to": "2026-11-25",
    "sessions": 49,
    "nominated": 3,
+   "bots": 3,
+   "promoted": 0
+  },
+  {
+   "night": "2026-11-28",
+   "data_to": "2026-11-25",
+   "sessions": 49,
+   "nominated": 0,
    "bots": 3,
    "promoted": 0
   }
