@@ -35,7 +35,7 @@ jobs:
           DAYS: ${{ inputs.days || '20' }}
         run: |
           set -o pipefail
-          python -m tradebot backtest $TICKERS --days "$DAYS" --source yahoo --planner rules 2>backtest.log | tee summary.txt
+          python -m tradebot -v backtest $TICKERS --days "$DAYS" --source yahoo --planner rules 2> >(tee backtest.log >&2) | tee summary.txt
       - name: Job summary
         if: always()
         run: |
