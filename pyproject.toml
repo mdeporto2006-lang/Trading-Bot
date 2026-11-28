@@ -1,0 +1,21 @@
+[project]
+name = "tradebot"
+version = "0.1.0"
+description = "Disciplined day-trading bot: Claude plans trades, code checks and executes them."
+requires-python = ">=3.11"
+dependencies = [
+  "anthropic>=2.14,<3",
+  "alpaca-py>=0.45,<1",
+  "pydantic>=2.7,<3",
+  "PyYAML>=6,<7",
+]
+
+[project.scripts]
+tradebot = "tradebot.cli:main"
+
+[tool.setuptools]
+packages = ["tradebot"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
