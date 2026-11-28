@@ -77,23 +77,24 @@ def _strip(b: dict, keep_genes: bool) -> dict:
     t = b["train"]
     out["t"] = {"n": t["trades"], "wr": t["win_rate"], "er": t["exp_r"], "pf": t["pf"]}
     for k in ("finalist", "champion", "on_champion_line", "val_fitness", "val_passes", "validate", "holdout",
-              "holdout_2tick"):
+              "holdout_2tick", "eq", "eq_val", "eq_hold"):
         if k in b:
             out[k] = b[k]
     if keep_genes:
         out.update(genes=b["genes"], about=b["about"], mutations=b["mutations"], train=b["train"],
                    elite_gens=b["elite_gens"])
-    else:
-        out["mutations"] = b["mutations"][:3]
+    else:  # keep the file small: a sentence instead of every gene
+        out["about"] = b["about"]
+        out["mutations"] = b["mutations"][:4]
     return out
 
 
 def build(main: Breeder, sel: dict, seeds: list[dict], null: dict | None, meta: dict) -> dict:
     champ = main.bots[sel["champion"]]
     notable = {bid for bid, b in main.bots.items()
-               if b["children"] or b["elite_gens"] or b.get("finalist") or b.get("on_champion_line")}
+               if b.get("finalist") or b.get("on_champion_line") or b["how"] == "textbook"}
     bots = [_strip(b, bid in notable) for bid, b in main.bots.items()]
-    gens = [{k: v for k, v in g.items() if k != "population"} for g in main.generations]
+    gens = main.generations  # each keeps its population list: the arena replays it
     v = verdict(champ, main.opts.target_win_rate, main.min_hold, null)
     textbook = [{"id": b["id"], "family": b["family"], "about": b["about"], "train": b["train"],
                  "validate": b.get("validate"), "holdout": b.get("holdout")}

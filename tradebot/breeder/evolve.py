@@ -89,6 +89,9 @@ class Breeder:
         self.train, self.val, self.hold = (set(x) for x in split_days(data))
         n_tr = max(1, len(self.train))
         tdays = sorted(self.train)
+        self.train_sorted = [d.isoformat() for d in tdays]
+        self.val_sorted = sorted(d.isoformat() for d in self.val)
+        self.hold_sorted = sorted(d.isoformat() for d in self.hold)
         self.train_mid = tdays[len(tdays) // 2].isoformat() if tdays else ""
         self.min_val = max(8, round(self.opts.min_trades * len(self.val) / n_tr))
         self.min_hold = max(8, round(self.opts.min_trades * len(self.hold) / n_tr))
@@ -122,6 +125,7 @@ class Breeder:
             "family": g["family"], "genes": g, "about": gm.describe(g), "train": _slim(m),
             "fitness": fit if ok else min(fit, fitness(m, self.opts.min_trades, True)), "passes": ok,
             "alive_until": gen, "children": 0, "elite_gens": [],
+            "eq": curve(tr, self.train_sorted),  # cumulative R at each train day's close (for the arena replay)
         }
         self.by_key[k] = bid
         for p in parents:
@@ -222,14 +226,18 @@ class Breeder:
         if not finalists:  # nothing passed: still report the best tries
             finalists = sorted(self.bots.values(), key=lambda b: b["fitness"], reverse=True)[:10]
         for b in finalists:
-            mv = self._score(b["genes"], self.val)
+            tv = run(b["genes"], self.data, self.val, o.slip_ticks)
+            b["eq_val"] = curve(tv, self.val_sorted)
+            mv = metrics(tv)
             b["validate"] = _slim(mv)
             b["val_fitness"] = fitness(mv, self.min_val)
             b["val_passes"] = passes(mv, self.min_val)
             b["finalist"] = True
         champ = max(finalists, key=lambda b: (b["val_passes"], b["val_fitness"]))
         for b in finalists:  # shown for context, NOT used to pick the champion
-            b["holdout"] = _slim(self._score(b["genes"], self.hold))
+            th = run(b["genes"], self.data, self.hold, o.slip_ticks)
+            b["eq_hold"] = curve(th, self.hold_sorted)
+            b["holdout"] = _slim(metrics(th))
         champ["champion"] = True
         # Stress test: the same holdout with double slippage (2 ticks a fill).
         champ["holdout_2tick"] = _slim(metrics(run(champ["genes"], self.data, self.hold, o.slip_ticks * 2)))
@@ -258,6 +266,18 @@ class Breeder:
     def days(self) -> dict:
         f = lambda s: sorted(d.isoformat() for d in s)
         return {"train": f(self.train), "validate": f(self.val), "holdout": f(self.hold)}
+
+
+def curve(trades, days: list[str]) -> list[float]:
+    """Cumulative R at the close of each day (days without trades stay flat)."""
+    by: dict[str, float] = {}
+    for t in trades:
+        by[t.day] = by.get(t.day, 0.0) + t.r
+    out, eq = [], 0.0
+    for d in days:
+        eq += by.get(d, 0.0)
+        out.append(round(eq, 2))
+    return out
 
 
 def ci95(wins: int, n: int) -> tuple[float, float]:

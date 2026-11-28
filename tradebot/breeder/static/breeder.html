@@ -82,6 +82,47 @@ tr.champ td { background: rgba(255,211,107,.07); }
 .note { color: var(--dim); font-size: 12px; max-width: 110ch; }
 .warns { margin: 0; padding-left: 18px; color: var(--dim); font-size: 12px; }
 .empty { color: var(--warn); }
+/* ---------- arena: the war-room replay of the breeding run ---------- */
+:root { --war-bg: #080102; --war-panel: #0f0305; --war-red: #ff2a3d; --war-red-2: #ff6b78; --war-dim: #8a4a50;
+  --war-line: rgba(255, 42, 61, .22); --war-line-2: rgba(255, 42, 61, .5); --war-up: #4dff9a; --war-down: #ff3b4e; }
+.arena { border: 1px solid var(--war-line-2); background: var(--war-bg); padding: 12px; display: grid; gap: 10px; min-width: 0;
+  box-shadow: 0 0 40px rgba(255, 42, 61, .08) inset; }
+.arena-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; font: 600 11px/1.2 var(--f-display); letter-spacing: .14em; text-transform: uppercase; color: var(--war-dim); }
+.arena-top .on { color: var(--war-red); display: inline-flex; align-items: center; gap: 6px; }
+.arena-top .on i { width: 7px; height: 7px; border-radius: 50%; background: var(--war-red); box-shadow: 0 0 10px var(--war-red); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .arena-top .on i { animation: none; } }
+.arena-top .gen { font: 700 20px/1 var(--f-display); color: #fff; letter-spacing: .08em; }
+.arena-top .gen small { color: var(--war-dim); font-size: 12px; }
+.phase { border: 1px solid var(--war-line-2); padding: 5px 10px; color: #fff; }
+.phase small { display: block; color: var(--war-dim); font-size: 9px; letter-spacing: .2em; margin-bottom: 2px; }
+.arena-ctl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-left: auto; }
+.wbtn { cursor: pointer; border: 1px solid var(--war-line-2); background: rgba(255, 42, 61, .08); color: var(--war-red-2); padding: 5px 10px;
+  font: 600 11px/1.2 var(--f-display); letter-spacing: .12em; text-transform: uppercase; }
+.wbtn[aria-pressed="true"] { background: rgba(255, 42, 61, .28); color: #fff; }
+.arena-ctl input[type=range] { width: 140px; accent-color: var(--war-red); }
+.arena-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 10px; }
+@media (max-width: 860px) { .arena-grid { grid-template-columns: minmax(0, 1fr); } }
+.fan-wrap { position: relative; border: 1px solid var(--war-line); background: #050001; min-width: 0; }
+#fan { display: block; width: 100%; height: 360px; }
+@media (max-width: 600px) { #fan { height: 250px; } }
+.fan-label { position: absolute; left: 8px; top: 6px; font: 600 10px/1.2 var(--f-display); letter-spacing: .14em; text-transform: uppercase; color: var(--war-dim); pointer-events: none; }
+.ticker { border-top: 1px solid var(--war-line); padding: 5px 8px; font-size: 11px; color: var(--war-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticker b { color: #fff; font-weight: 500; } .ticker .u { color: var(--war-up); } .ticker .d { color: var(--war-down); }
+.tape { border: 1px solid var(--war-line-2); background: var(--war-panel); min-width: 0; display: grid; grid-template-rows: auto 1fr; max-height: 400px; }
+.tape h3 { margin: 0; padding: 7px 10px; border-bottom: 1px solid var(--war-line); font: 600 11px/1.2 var(--f-display); letter-spacing: .14em; text-transform: uppercase; color: var(--war-red); }
+.tape h3 span { color: var(--war-dim); }
+#tape { overflow: hidden; font-size: 11.5px; }
+#tape div { display: grid; grid-template-columns: 14px 78px 1fr auto; gap: 6px; padding: 2px 10px; border-bottom: 1px solid rgba(255, 42, 61, .07); }
+#tape div.up { color: var(--war-up); } #tape div.dn { color: var(--war-down); background: rgba(255, 42, 61, .10); }
+#tape div span:nth-child(3) { color: var(--war-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arena-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+.wstat { border: 1px solid var(--war-line); background: var(--war-panel); padding: 8px 10px; display: grid; gap: 3px; min-width: 0; }
+.wstat .k { font: 600 10px/1.2 var(--f-display); letter-spacing: .14em; text-transform: uppercase; color: var(--war-dim); }
+.wstat .v { font: 700 20px/1.1 var(--f-display); color: #fff; }
+.wstat .s { font-size: 11px; color: var(--war-dim); overflow-wrap: anywhere; }
+.mix { display: flex; height: 8px; margin-top: 4px; }
+.arena-note { margin: 0; font-size: 11.5px; color: var(--war-dim); max-width: 120ch; }
 </style>
 </head>
 <body>
@@ -90,6 +131,31 @@ tr.champ td { background: rgba(255,211,107,.07); }
     <h1>BOT <b>BREEDER</b> LAB</h1>
     <span class="sub" id="meta">loading…</span>
   </header>
+
+  <section class="arena" id="arena" aria-label="Breeding replay">
+    <div class="arena-top">
+      <span class="on"><i></i>Breeder replay</span>
+      <span class="gen" id="a-gen">GEN 0<small>/0</small></span>
+      <span class="phase"><small>Phase / tribe</small><span id="a-phase">Loading</span></span>
+      <div class="arena-ctl">
+        <button class="wbtn" id="a-play" aria-pressed="true">Pause</button>
+        <button class="wbtn" id="a-speed">Speed 1×</button>
+        <label for="a-scrub" class="sub">Gen</label>
+        <input type="range" id="a-scrub" min="0" max="1" value="0">
+        <button class="wbtn" id="a-final">Final round</button>
+      </div>
+    </div>
+    <div class="arena-grid">
+      <div class="fan-wrap">
+        <span class="fan-label" id="a-label">Equity in R, train days</span>
+        <canvas id="fan" aria-label="Equity curves of every bot in the current generation"></canvas>
+        <div class="ticker" id="a-ticker">&nbsp;</div>
+      </div>
+      <div class="tape"><h3>Live trade tape <span id="a-tapeinfo"></span></h3><div id="tape"></div></div>
+    </div>
+    <div class="arena-stats" id="a-stats"></div>
+    <p class="arena-note">A replay of the real run, built from each bot's daily results. Every line is one bot's running total in R (1R = what the stop risks). In each generation the bots trade the train days, then selection keeps the elites (bright lines) and the rest are eliminated (fade out) and replaced by children. The final round puts the finalists on validate days, then the never-seen holdout days, where the champion is drawn in white.</p>
+  </section>
 
   <section class="panel" id="verdict">
     <h2>Verdict</h2>
@@ -303,7 +369,7 @@ function render(rep) {
     splitCard("Holdout (never seen)", c.holdout, d.holdout, goal, true);
   $("#lines").innerHTML = [`Champion ${c.id}: ${c.about}`, ...v.lines].map(x => `<li>${esc(x)}</li>`).join("");
   $("#fam-legend").innerHTML = m.families.map(f => `<span><i style="background:${famColor(f)}"></i>${FAM[f]}</span>`).join("");
-  evoChart(rep); treeView();
+  evoChart(rep); treeView(); arena(rep);
   // bloodline
   const line = rep.lineage.map(id => BY[id]).filter(Boolean).sort((a, b) => a.gen - b.gen);
   $("#chain").innerHTML = line.map(b => `<div><button class="link" data-go="${b.id}">${b.id}</button><span><span style="color:${famColor(b.family)}">${FAM[b.family]}</span> · ${b.how}${b.mutations && b.mutations.length ? ": " + esc(b.mutations.join(", ")) : ""} · train ${pct(b.t.wr)} n=${b.t.n} <span class="${cls(b.t.er)}">${r3(b.t.er)}</span></span></div>`).join("");
@@ -331,6 +397,146 @@ document.addEventListener("click", e => {
 $("#show-surv").onclick = () => { MODE = "surv"; treeView(); };
 $("#show-all").onclick = () => { MODE = "all"; treeView(); };
 $("#show-line").onclick = () => { MODE = "line"; treeView(); };
+// ---------------- arena replay ----------------
+const SHORT = { orb: "ORB", vwap_revert: "VWAP", intraday_mom: "MOM", trend_pullback: "TREND" };
+const A = { gen: 0, t: 0, playing: true, speed: 1, stage: "run", fade: 0, rounds: [], last: 0, tapeDay: -1 };
+function hashHue(id) { let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; }
+function arenaRounds(rep) {
+  const gens = rep.generations, rounds = [];
+  gens.forEach((g, i) => {
+    const pop = (g.population || []).map(id => BY[id]).filter(b => b && b.eq);
+    const next = new Set(i + 1 < gens.length ? gens[i + 1].population || [] : rep.finalists.map(f => f.id));
+    rounds.push({ kind: "gen", gen: g.gen, bots: pop, key: "eq", days: rep.meta.days.train, survive: next, stats: g,
+      phase: i === 0 ? "Genesis (textbook + random)" : "Breeding · selection", label: "Equity in R · train days" });
+  });
+  const fin = rep.finalists.map(f => BY[f.id]).filter(b => b && b.eq_val);
+  if (fin.length) {
+    rounds.push({ kind: "val", bots: fin, key: "eq_val", days: rep.meta.days.validate, survive: new Set([rep.champion.id]),
+      phase: "Final war · validate (picks champion)", label: "Equity in R · validate days" });
+    rounds.push({ kind: "hold", bots: fin, key: "eq_hold", days: rep.meta.days.holdout, survive: new Set([rep.champion.id]),
+      phase: "Final war · holdout (never seen)", label: "Equity in R · holdout days" });
+  }
+  return rounds;
+}
+function fanSize() {
+  const c = $("#fan"), r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  if (c.width !== Math.round(r.width * dpr) || c.height !== Math.round(r.height * dpr)) { c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr); }
+  return [c.getContext("2d"), c.width, c.height, dpr];
+}
+function drawFan() {
+  const R = A.rounds[A.gen]; if (!R) return;
+  const [ctx, W, H, dpr] = fanSize(), n = R.days.length, pad = 22 * dpr, L = 40 * dpr, B = 16 * dpr;
+  ctx.fillStyle = "#050001"; ctx.fillRect(0, 0, W, H);
+  const vals = R.bots.flatMap(b => b[R.key] || []).sort((a, b) => a - b);
+  const q = p => vals.length ? vals[Math.min(vals.length - 1, Math.max(0, Math.floor(p * (vals.length - 1))))] : 0;
+  let lo = Math.min(-1, q(0.01)), hi = Math.max(1, q(0.995));
+  const x = i => L + (W - L - pad) * (n > 1 ? i / (n - 1) : 0), y = v => pad + (H - pad - B) * (1 - (Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo));
+  ctx.font = `${10 * dpr}px JetBrains Mono, monospace`; ctx.fillStyle = css("--war-dim"); ctx.textAlign = "right";
+  const step = Math.max(1, Math.ceil((hi - lo) / 5));
+  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
+    ctx.strokeStyle = v === 0 ? "rgba(255,42,61,.45)" : "rgba(255,42,61,.10)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(L, y(v)); ctx.lineTo(W - pad, y(v)); ctx.stroke();
+    ctx.fillText((v > 0 ? "+" : "") + v + "R", L - 5 * dpr, y(v) + 3 * dpr);
+  }
+  ctx.textAlign = "left"; ctx.fillText(R.days[0] || "", L, H - 3 * dpr); ctx.textAlign = "right"; ctx.fillText(R.days[n - 1] || "", W - pad, H - 3 * dpr);
+  const prog = A.t * (n - 1), upto = Math.floor(prog), frac = prog - upto;
+  const champ = REP.champion.id, best = R.bots.reduce((a, b) => (!a || b.fitness > a.fitness ? b : a), null);
+  const order = [...R.bots].sort((a, b) => (R.survive.has(a.id) - R.survive.has(b.id)) || a.fitness - b.fitness);
+  for (const b of order) {
+    const eq = b[R.key]; if (!eq || !eq.length) continue;
+    const surv = R.survive.has(b.id), hl = R.kind === "gen" ? b === best : b.id === champ;
+    let alpha = hl ? 1 : surv ? .85 : .55;
+    if (A.stage === "select" && !surv && !hl) alpha *= Math.max(0.06, 1 - A.fade);
+    ctx.strokeStyle = hl ? `rgba(255,255,255,${alpha})` : `hsla(${hashHue(b.id)}, 95%, ${surv ? 62 : 55}%, ${alpha})`;
+    ctx.lineWidth = (hl ? 2.6 : surv && A.stage === "select" ? 1.6 : 1) * dpr;
+    ctx.beginPath(); ctx.moveTo(x(0), y(0));
+    for (let i = 0; i <= upto && i < n; i++) ctx.lineTo(x(i), y(eq[i]));
+    if (upto + 1 < n) ctx.lineTo(x(upto) + (x(upto + 1) - x(upto)) * frac, y(eq[upto] + (eq[upto + 1] - eq[upto]) * frac));
+    ctx.stroke();
+  }
+  // the sweeping red cursor
+  const cx = A.t >= 1 ? x(n - 1) : x(upto) + (n > 1 ? (x(upto + 1) - x(upto)) * frac : 0);
+  const g = ctx.createLinearGradient(cx - 26 * dpr, 0, cx, 0); g.addColorStop(0, "rgba(255,42,61,0)"); g.addColorStop(1, "rgba(255,42,61,.35)");
+  ctx.fillStyle = g; ctx.fillRect(cx - 26 * dpr, pad, 26 * dpr, H - pad - B);
+  ctx.strokeStyle = css("--war-red"); ctx.lineWidth = 2 * dpr; ctx.shadowColor = css("--war-red"); ctx.shadowBlur = 14 * dpr;
+  ctx.beginPath(); ctx.moveTo(cx, pad); ctx.lineTo(cx, H - B); ctx.stroke(); ctx.shadowBlur = 0;
+}
+function pushTape(R, day) {
+  const rows = [];
+  for (const b of R.bots) { const eq = b[R.key]; if (!eq) continue; const r = eq[day] - (day ? eq[day - 1] : 0); if (Math.abs(r) > 0.005) rows.push([b, r]); }
+  rows.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  const tape = $("#tape");
+  for (const [b, r] of rows.slice(0, 5).reverse()) {
+    const d = document.createElement("div"); d.className = r > 0 ? "up" : "dn";
+    d.innerHTML = `<span>${r > 0 ? "▲" : "▼"}</span><span>${b.id}</span><span>${SHORT[b.family]} · ${R.days[day].slice(5)}</span><span>${r > 0 ? "+" : ""}${r.toFixed(2)}R</span>`;
+    tape.prepend(d);
+  }
+  while (tape.children.length > 30) tape.lastChild.remove();
+}
+function arenaStats() {
+  const R = A.rounds[A.gen]; if (!R) return;
+  const isGen = R.kind === "gen", total = REP.generations.length - 1;
+  $("#a-gen").innerHTML = isGen ? `GEN ${R.gen}<small>/${total}</small>` : `FINAL<small>/${R.kind === "val" ? "validate" : "holdout"}</small>`;
+  $("#a-phase").textContent = A.stage === "select" && isGen ? (A.gen === A.rounds.length - 3 ? "Selection · finalists chosen" : "Selection · survivors vs eliminated") : R.phase;
+  $("#a-label").textContent = R.label;
+  $("#a-scrub").max = A.rounds.length - 1; $("#a-scrub").value = A.gen;
+  const key = R.kind === "gen" ? "train" : R.kind === "val" ? "validate" : "holdout";
+  const best = R.kind === "gen" ? R.bots.reduce((a, b) => (!a || b.fitness > a.fitness ? b : a), null) : BY[REP.champion.id];
+  const m = best ? (key === "train" ? (best.train || { trades: best.t.n, win_rate: best.t.wr, exp_r: best.t.er, pf: best.t.pf }) : best[key]) : null;
+  const surv = R.bots.filter(b => R.survive.has(b.id)).length;
+  const fam = {}; for (const b of R.bots) fam[b.family] = (fam[b.family] || 0) + 1;
+  const mix = REP.meta.families.map(f => `<span style="flex:${fam[f] || 0};background:${famColor(f)}" title="${FAM[f]}: ${fam[f] || 0}"></span>`).join("");
+  $("#a-stats").innerHTML = `
+    <div class="wstat"><span class="k">${R.kind === "gen" ? "Generation leader" : "Champion"}</span><span class="v">${best ? best.id : "-"}</span><span class="s" style="color:${best ? famColor(best.family) : ""}">${best ? FAM[best.family] : ""}</span></div>
+    <div class="wstat"><span class="k">Win rate · ${key}</span><span class="v ${m && m.win_rate >= REP.meta.options.target_win_rate ? "pos" : "mid"}">${m ? pct(m.win_rate) : "-"}</span><span class="s">${m ? m.trades + " trades · goal " + pct(REP.meta.options.target_win_rate) : ""}</span></div>
+    <div class="wstat"><span class="k">Per trade · profit factor</span><span class="v ${m ? cls(m.exp_r) : ""}">${m ? r3(m.exp_r) : "-"}</span><span class="s">${m ? "PF " + m.pf.toFixed(2) : ""}</span></div>
+    <div class="wstat"><span class="k">${isGen ? "Survivors / eliminated" : "Finalists"}</span><span class="v">${isGen ? surv + " / " + (R.bots.length - surv) : R.bots.length}</span><span class="s">${isGen ? (R.stats.passing + " pass the money gates") : "one champion, picked on validate"}</span></div>
+    <div class="wstat"><span class="k">Family mix</span><div class="mix">${mix}</div><span class="s">${REP.meta.families.map(f => SHORT[f] + " " + (fam[f] || 0)).join(" · ")}</span></div>`;
+  const top = [...R.bots].sort((a, b) => ((b[R.key] || [0]).at(-1)) - ((a[R.key] || [0]).at(-1))).slice(0, 8);
+  $("#a-ticker").innerHTML = top.map(b => { const v = (b[R.key] || [0]).at(-1); return `<b>${b.id}</b> ${SHORT[b.family]} <span class="${v >= 0 ? "u" : "d"}">${v >= 0 ? "+" : ""}${v.toFixed(1)}R</span>`; }).join("  ·  ");
+  $("#a-tapeinfo").textContent = `· ${R.bots.length} bots · ${R.days.length} days`;
+}
+function arenaGo(i) {
+  A.gen = Math.max(0, Math.min(A.rounds.length - 1, i)); A.t = 0; A.stage = "run"; A.fade = 0; A.tapeDay = -1; arenaStats(); drawFan();
+}
+function arenaTick(now) {
+  const dt = Math.min(100, now - (A.last || now)); A.last = now;
+  if (A.playing && A.rounds.length) {
+    const R = A.rounds[A.gen], runMs = R.kind === "gen" ? 2200 : 4200;
+    if (A.stage === "run") {
+      A.t = Math.min(1, A.t + dt * A.speed / runMs);
+      const day = Math.floor(A.t * (R.days.length - 1) + 1e-9);
+      while (A.tapeDay < day) { A.tapeDay++; pushTape(R, A.tapeDay); }
+      if (A.t >= 1) { A.stage = "select"; A.fade = 0; arenaStats(); }
+    } else {
+      A.fade = Math.min(1, A.fade + dt * A.speed / 900);
+      if (A.fade >= 1) {
+        if (A.gen < A.rounds.length - 1) arenaGo(A.gen + 1);
+        else { A.playing = false; $("#a-play").textContent = "Replay"; $("#a-play").setAttribute("aria-pressed", "false"); }
+      }
+    }
+    drawFan();
+  }
+  requestAnimationFrame(arenaTick);
+}
+function arena(rep) {
+  A.rounds = arenaRounds(rep);
+  if (!A.rounds.length || !A.rounds[0].bots.length) { $("#a-phase").textContent = "No replay data in this run"; return; }
+  if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    A.playing = false; arenaGo(A.rounds.length - 1); A.t = 1; A.stage = "select"; A.fade = 1;
+    $("#a-play").textContent = "Play"; $("#a-play").setAttribute("aria-pressed", "false"); drawFan();
+  } else arenaGo(0);
+  $("#a-play").onclick = () => {
+    if (!A.playing && A.gen === A.rounds.length - 1 && A.fade >= 1) arenaGo(0);
+    A.playing = !A.playing; $("#a-play").textContent = A.playing ? "Pause" : "Play"; $("#a-play").setAttribute("aria-pressed", A.playing);
+  };
+  $("#a-speed").onclick = () => { A.speed = A.speed >= 8 ? 1 : A.speed * 2; $("#a-speed").textContent = `Speed ${A.speed}×`; };
+  $("#a-scrub").oninput = e => arenaGo(+e.target.value);
+  $("#a-final").onclick = () => arenaGo(A.rounds.length - 2);
+  addEventListener("resize", drawFan);
+  requestAnimationFrame(arenaTick);
+}
+
 load().then(render).catch(err => { $("#headline").textContent = err.message; $("#headline").className = "headline no"; });
 </script>
 </body>
