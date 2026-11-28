@@ -14,7 +14,7 @@ dependencies = [
 tradebot = "tradebot.cli:main"
 
 [tool.setuptools]
-packages = ["tradebot", "tradebot.improve", "tradebot.dashboard"]
+packages = ["tradebot", "tradebot.improve", "tradebot.dashboard", "tradebot.backtest"]
 
 [tool.setuptools.package-data]
 "tradebot.dashboard" = ["static/*.html"]
