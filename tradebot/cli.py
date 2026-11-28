@@ -16,6 +16,9 @@ Backtesting:
   python -m tradebot backtest --planner claude --estimate   # cost first
   python -m tradebot timemachine NVDA --at "2026-11-20 10:30"
 
+Bot breeder (futures, rules only, free Yahoo data):
+  python -m tradebot breed --generations 50 --population 100 --seeds 3
+
 Dashboard:
   python -m tradebot dashboard           # live dashboard at http://127.0.0.1:8765
   python -m tradebot dashboard --demo    # simulated data, no keys needed
@@ -75,12 +78,23 @@ def main(argv: list[str] | None = None) -> None:
     from .backtest.commands import add_parsers, run_backtest, run_timemachine
 
     add_parsers(sub)
+    from .breeder.commands import add_parser as add_breed_parser
+
+    add_breed_parser(sub)
     args = ap.parse_args(argv)
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    if args.cmd == "breed":  # rules only, never places orders
+        from .breeder.commands import run_breed
+
+        try:
+            run_breed(args)
+        except RuntimeError as e:
+            sys.exit(f"breed stopped: {e}")
+        return
     if args.cmd == "dashboard":
         from .dashboard.server import serve
 

@@ -8,3 +8,4 @@ __pycache__/
 tuning/
 backtests/
 backtest_cache/
+breeder_runs/

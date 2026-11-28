@@ -2,6 +2,8 @@
 
   GET  /                  the dashboard page
   GET  /api/state         everything the page shows (token required)
+  GET  /breeder           the bot breeder's family tree and results
+  GET  /api/breeder       the latest breeding run (token required)
   POST /api/approve       {"id": "<proposal id>"}  adopt a passed proposal
   POST /api/rollback      {"to": <version or null>}  go back a settings version
 
@@ -29,6 +31,10 @@ from .state import DashboardState
 
 log = logging.getLogger(__name__)
 STATIC = Path(__file__).parent / "static"
+BREEDER_PAGE = Path(__file__).parent.parent / "breeder" / "static" / "breeder.html"
+# Where the latest breeding run is read from: the local run first, then the
+# copy committed to the repo by the Breed workflow.
+BREEDER_RUNS = ("breeder_runs/latest.json", "docs/breeder/latest.json")
 MAX_BODY = 4096
 
 
@@ -64,6 +70,15 @@ def make_handler(state: DashboardState, token: str, demo: bool):
                 if demo:
                     html = html.replace(b"<html lang=\"en\">", b"<html lang=\"en\" data-force-demo=\"1\">", 1)
                 return self._send(200, html, "text/html; charset=utf-8")
+            if path in ("/breeder", "/breeder/"):
+                return self._send(200, BREEDER_PAGE.read_bytes(), "text/html; charset=utf-8")
+            if path == "/api/breeder":
+                if not self._authorized():
+                    return self._json(HTTPStatus.UNAUTHORIZED, {"error": "missing or wrong token"})
+                for p in BREEDER_RUNS:
+                    if Path(p).exists():
+                        return self._send(200, Path(p).read_bytes(), "application/json")
+                return self._json(404, {"error": "no breeding run yet"})
             if path == "/api/state":
                 if not self._authorized():
                     return self._json(HTTPStatus.UNAUTHORIZED, {"error": "missing or wrong token"})

@@ -256,6 +256,54 @@ Claude was trained on data up to a cutoff, so for older dates it may already
 "know" what happened next. Use the most recent dates when testing Claude; the
 rules planner has no such problem.
 
+## Bot breeder (futures)
+
+`python -m tradebot breed` evolves futures day-trading bots and keeps a full
+family tree. Rules only: no Claude calls, no API keys, no orders.
+
+- **Markets:** ES, NQ, YM, RTY (stock index), CL (oil), GC (gold), ZN (10-year
+  note), 6E (euro), from Yahoo's free continuous front-month series. P&L is per
+  micro contract where one exists (MES, MNQ, MYM, M2K, MCL, MGC, M6E; ZN is full
+  size), with real tick sizes, a round-trip commission and 1 tick of slippage on
+  every stop and market fill. Each market trades only in its main day session
+  and is flat before it ends.
+- **Strategy families:** public, documented types used across institutional
+  desks and in published research, not any bank's proprietary strategies
+  (those aren't public): opening range breakout, VWAP mean reversion, intraday
+  momentum (Gao, Han, Li & Zhou 2018), and trend pullback with a time-series
+  momentum filter (Moskowitz, Ooi & Pedersen 2012). Carry isn't included: it
+  needs second-month prices the free data lacks, and it isn't a day trade.
+- **Genes:** family settings, entry window, direction, trend filter, stop and
+  target distances, breakeven, trailing and time stops, max trades a day, and
+  which markets to trade. Children come from crossover and mutation of
+  tournament-picked parents; the best of each generation survive as elites.
+- **Honesty rules:** the days are split by date into TRAIN (half), VALIDATE
+  and HOLDOUT (a quarter each). Breeding sees only TRAIN; the champion is
+  picked on VALIDATE; HOLDOUT is scored once. A bot only "passes" with
+  +0.05R a trade after costs, profit factor above 1.15, enough trades, and an
+  edge in both halves of TRAIN, so a tiny target with a wide stop can't win
+  by looking busy. A luck test reruns the whole breeder on scrambled prices.
+- **Data is short:** Yahoo keeps 5-minute bars for ~60 days and 1-minute bars
+  for ~30. That is a few weeks of one market regime, so read the 95% range on
+  the holdout win rate, not just the number.
+
+Run it in GitHub Actions (Actions → Breed → Run workflow) or locally:
+
+```bash
+python -m tradebot breed                       # Yahoo data, 3 runs x 50 generations x 100 bots
+python -m tradebot breed --source synthetic    # offline try-out on made-up prices
+```
+
+Each run writes `breeder_runs/latest.json`, `summary.md` and `tree.html` (a
+page that opens on its own). The workflow also saves them to `docs/breeder/`,
+and the dashboard shows them at `/breeder`: the verdict, the evolution chart,
+the family tree (click any bot for its genes, parents, mutations and scores),
+the champion's bloodline, finalists and holdout trades.
+
+Alpaca doesn't trade futures. Trading a bred bot live would need a futures
+broker (for example Interactive Brokers, Tradovate or NinjaTrader), and it
+should be paper traded first.
+
 ## Self-improvement
 
 The bot learns from its own results, but it cannot quietly rewrite its rules.
