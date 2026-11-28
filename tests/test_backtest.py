@@ -253,7 +253,7 @@ class _FakeHTTP:
         if "getcrumb" in url:
             return _Resp(200, text="abc123")
         st = self.statuses.pop(0)
-        ok = {"chart": {"result": [{"timestamp": [1763476200], "indicators": {"quote": [
+        ok = {"chart": {"result": [{"timestamp": [1795012200], "indicators": {"quote": [
             {"open": [1.0], "high": [1.1], "low": [0.9], "close": [1.05], "volume": [10]}]}}]}}
         return _Resp(st, ok if st == 200 else {})
 

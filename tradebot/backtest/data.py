@@ -146,6 +146,17 @@ class AlpacaHistory:
 # --------------------------------------------------------------------------
 # Yahoo Finance chart API (free, no keys)
 # --------------------------------------------------------------------------
+class YahooRejected(RuntimeError):
+    """Yahoo answered 400/422: it won't serve that window."""
+
+
+def _body(r) -> str:
+    try:
+        return (r.text or "")[:300].replace("\n", " ")
+    except Exception:
+        return ""
+
+
 class YahooHistory:
     """Yahoo's public chart endpoint. Minute bars exist only for about the last
     30 calendar days, fetched in windows of at most 7 days."""
@@ -232,6 +243,9 @@ class YahooHistory:
                 self._ensure_crumb()  # then retry with cookie + crumb
             elif r.status_code == 404:
                 raise RuntimeError(f"Yahoo has no data for {ticker} ({last_err})")
+            elif r.status_code in (400, 422):
+                # Yahoo rejects some date windows (e.g. minute bars older than ~30 days).
+                raise YahooRejected(f"{last_err}: {_body(r)}")
             if r.status_code == 429 or r.status_code >= 500 or r.status_code in (401, 403):
                 retry_after = r.headers.get("Retry-After")
                 delay = float(retry_after) if retry_after and retry_after.isdigit() else min(60, 2 ** (attempt + 1))
@@ -241,7 +255,7 @@ class YahooHistory:
                          attempt + 1, self.MAX_TRIES)
                 self._sleep(delay + random.random())
                 continue
-            raise RuntimeError(f"Yahoo request for {ticker} failed: {last_err}")
+            raise RuntimeError(f"Yahoo request for {ticker} failed: {last_err}: {_body(r)}")
         raise RuntimeError(
             f"Yahoo kept refusing requests for {ticker} ({last_err}) after {self.MAX_TRIES} tries. "
             "Yahoo throttles some cloud machines hard. Try: `pip install curl_cffi` and re-run, "
@@ -263,8 +277,12 @@ class YahooHistory:
     def daily(self, ticker: str, start: date, end: date) -> list[DailyRow]:
         p1 = int(datetime.combine(start, time(0), timezone.utc).timestamp())
         p2 = int(datetime.combine(end + timedelta(days=1), time(0), timezone.utc).timestamp())
-        res = self._get(ticker, {"period1": p1, "period2": p2, "interval": "1d", "includePrePost": "false"})
-        return [(ts.astimezone(ET).date(), b) for ts, b in self.parse(res)]
+        try:
+            res = self._get(ticker, {"period1": p1, "period2": p2, "interval": "1d", "includePrePost": "false"})
+        except YahooRejected as e:
+            log.info("Yahoo rejected the daily window for %s (%s); asking for the last year instead", ticker, e)
+            res = self._get(ticker, {"range": "1y", "interval": "1d", "includePrePost": "false"})
+        return [(ts.astimezone(ET).date(), b) for ts, b in self.parse(res) if start <= ts.astimezone(ET).date() <= end]
 
     def minutes(self, ticker: str, day: date) -> list[MinuteRow]:
         key = (ticker, day)
@@ -272,8 +290,13 @@ class YahooHistory:
             # Fetch a week at a time and fill the cache for every day in it.
             start = day - timedelta(days=day.weekday())
             p1 = int(datetime.combine(start, time(0), ET).timestamp())
-            p2 = int(datetime.combine(start + timedelta(days=7), time(0), ET).timestamp())
-            res = self._get(ticker, {"period1": p1, "period2": p2, "interval": "1m", "includePrePost": "false"})
+            p2 = min(int(datetime.combine(start + timedelta(days=7), time(0), ET).timestamp()), int(_time.time()) - 60)
+            try:
+                res = self._get(ticker, {"period1": p1, "period2": p2, "interval": "1m", "includePrePost": "false"})
+            except YahooRejected as e:
+                log.warning("Yahoo has no minute bars for %s in the week of %s (%s); skipping those days",
+                            ticker, start, e)
+                res = {}
             by_day: dict[date, list[MinuteRow]] = {}
             for ts, b in self.parse(res):
                 d = ts.astimezone(ET).date()
