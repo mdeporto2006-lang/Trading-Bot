@@ -100,6 +100,41 @@ it would place.
 scan interval and a 4-ticker watchlist that's up to about 280 calls a day.
 Raise `scan_interval_seconds` or shorten the watchlist to spend less.
 
+## Dashboard
+
+A live control-room view of the bot: the watchlist scan, each ticker's six
+checks with their values, Claude's JSON plan and the risk gate's verdict, open
+positions on a stop/entry/target ladder (watch the trailing stop move), risk
+limits in use, the event log, replay scores, and self-improvement proposals with
+approve and rollback buttons.
+
+```bash
+python -m tradebot dashboard              # http://127.0.0.1:8765/#token=...
+python -m tradebot dashboard --host 0.0.0.0   # open it from your phone on the same Wi-Fi
+python -m tradebot dashboard --demo       # simulated data, no keys, no bot needed
+```
+
+- It reads only the files the bot writes (`journal/trades.jsonl`,
+  `outcomes.jsonl`, `status.json`, `events.jsonl`, and `tuning/`). It needs no
+  API keys and never places, changes or cancels orders.
+- `run` now writes `journal/status.json` (account, positions, stops, limits,
+  what it's doing) every loop and appends to `journal/events.jsonl`. Run the
+  dashboard in a second terminal next to `run`.
+- The server prints a link with an access token; every data and action call
+  needs it. Set `TRADEBOT_DASHBOARD_TOKEN` to keep the same link across
+  restarts. Anyone with the link can see your positions and approve or roll
+  back settings, so only use `--host 0.0.0.0` on a network you trust.
+- **Approve** and **Roll back** do the same as the `approve` and `rollback`
+  commands (tap twice to confirm). A running bot picks up the new settings the
+  next time it starts.
+- Demo mode is labeled on every screen. Its prices, trades and P&L are made
+  up by the page. If the page can't reach the bot it falls back to demo and
+  says why.
+- Opening the page with no live data yet? It shows empty states until the
+  first scan, and "bot not running" until `run` writes its first status.
+
+![Dashboard on desktop (demo data)](docs/dashboard/desktop.jpg)
+
 ## Self-improvement
 
 The bot learns from its own results, but it cannot quietly rewrite its rules.
