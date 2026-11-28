@@ -57,9 +57,11 @@ def verdict(champ: dict, target: float, min_hold: int, null: dict | None) -> dic
         nc = null.get("champion") or {}
         nt, nh = nc.get("train") or {}, nc.get("holdout") or {}
         lines.append(f"Luck test: the same breeder run on scrambled prices (all real patterns destroyed) still "
-                     f"bred a {_pct(nt.get('win_rate'))} in-sample bot ({nt.get('exp_r', 0):+.3f}R), which then did "
-                     f"{_pct(nh.get('win_rate'))} ({nh.get('exp_r', 0):+.3f}R) on its holdout. In-sample numbers "
-                     "this good are what luck alone produces.")
+                     f"bred a {_pct(nt.get('win_rate'))} in-sample bot ({nt.get('exp_r', 0):+.3f}R over "
+                     f"{nt.get('trades', 0)} trades), which then "
+                     + (f"did {_pct(nh['win_rate'])} ({nh['exp_r']:+.3f}R) over {nh['trades']} trades on its holdout. "
+                        if nh.get("trades") else "made no trades on its holdout. ")
+                     + "That is what luck alone can do in-sample, so only the holdout number counts.")
     return {"headline": head, "reached": reached, "solid": reached and lo >= target, "lines": lines,
             "holdout_ci95": [lo, hi]}
 

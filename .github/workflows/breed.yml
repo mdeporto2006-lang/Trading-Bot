@@ -25,7 +25,7 @@ on:
       - ".github/workflows/breed.yml"
 
 permissions:
-  contents: read
+  contents: write  # to save the latest run under docs/breeder/ for the dashboard
 
 jobs:
   breed:
@@ -62,6 +62,17 @@ jobs:
             echo '```'
             echo '</details>'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Save the run to docs/breeder (the dashboard's /breeder page reads it)
+        if: success()
+        continue-on-error: true
+        run: |
+          mkdir -p docs/breeder
+          cp breeder_runs/latest.json breeder_runs/summary.md breeder_runs/tree.html docs/breeder/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/breeder
+          git commit -m "Breeder run $(date -u +%Y-%m-%dT%H:%MZ) [skip ci]" || exit 0
+          git pull --rebase origin "$GITHUB_REF_NAME" && git push origin "HEAD:$GITHUB_REF_NAME"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

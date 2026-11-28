@@ -19,6 +19,8 @@ Fitness, built so the easy fake answer loses:
   profit factor above 1.15 and at least `min_trades` trades (on validate and
   holdout: above 0R and 1.0). Failing bots always rank below
   passing ones.
+- It must pass in both halves of the train days on its own (half the trade
+  minimum each), and it's scored on its worse half.
 - Passing bots are ranked by the lower edge of the win rate's confidence
   band (Wilson), so 14 wins of 20 doesn't beat 70 of 110, plus a bonus for
   expectancy in R.
@@ -86,6 +88,8 @@ class Breeder:
         self.rng = random.Random(self.opts.seed)
         self.train, self.val, self.hold = (set(x) for x in split_days(data))
         n_tr = max(1, len(self.train))
+        tdays = sorted(self.train)
+        self.train_mid = tdays[len(tdays) // 2].isoformat() if tdays else ""
         self.min_val = max(8, round(self.opts.min_trades * len(self.val) / n_tr))
         self.min_hold = max(8, round(self.opts.min_trades * len(self.hold) / n_tr))
         self.bots: dict[str, dict] = {}
@@ -104,11 +108,19 @@ class Breeder:
             return None
         self._n += 1
         bid = f"G{gen}-{self._n}"
-        m = self._score(g, self.train)
+        tr = run(g, self.data, self.train, self.opts.slip_ticks)
+        m = metrics(tr)
+        # Consistency: the bot must pass in BOTH halves of the train days, and
+        # its fitness is the worse half. One lucky week can't carry it.
+        half = self.opts.min_trades // 2
+        ma = metrics([t for t in tr if t.day < self.train_mid])
+        mb = metrics([t for t in tr if t.day >= self.train_mid])
+        fit = min(fitness(ma, half, True), fitness(mb, half, True))
+        ok = passes(m, self.opts.min_trades, True) and passes(ma, half, True) and passes(mb, half, True)
         self.bots[bid] = {
             "id": bid, "gen": gen, "parents": parents, "how": how, "mutations": mutations,
             "family": g["family"], "genes": g, "about": gm.describe(g), "train": _slim(m),
-            "fitness": fitness(m, self.opts.min_trades, True), "passes": passes(m, self.opts.min_trades, True),
+            "fitness": fit if ok else min(fit, fitness(m, self.opts.min_trades, True)), "passes": ok,
             "alive_until": gen, "children": 0, "elite_gens": [],
         }
         self.by_key[k] = bid

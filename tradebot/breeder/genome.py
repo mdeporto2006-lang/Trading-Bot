@@ -60,7 +60,7 @@ SPACE: dict[str, G] = {
     "stop_mode": G("choice", ("atr", "structure")),
     "stop_atr": G("float", lo=0.04, hi=0.6, step=0.02),  # stop distance as a fraction of daily ATR
     "target_mode": G("choice", ("r", "vwap")),  # vwap only used by vwap_revert
-    "target_r": G("float", lo=0.25, hi=4.0, step=0.25),
+    "target_r": G("float", lo=0.5, hi=4.0, step=0.25),  # below 0.5R costs eat the edge
     "breakeven_r": G("choice", (0, 0.3, 0.5, 0.75, 1.0, 1.5)),  # move stop to entry after this many R (0 off)
     "trail_after_r": G("choice", (0, 0.5, 1.0, 1.5, 2.0, 3.0)),  # 0 off
     "trail_dist_r": G("float", lo=0.25, hi=2.0, step=0.25),
